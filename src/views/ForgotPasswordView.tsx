@@ -12,7 +12,7 @@ import {
   Linking,
   Image,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { PaletteType, Rounded, Spacing, Typography } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
 import { SCREEN_ASSETS } from '../../assets/screenAssets';
@@ -23,7 +23,7 @@ interface ForgotPasswordViewProps {
 }
 
 type ResetType = 'password' | 'pin';
-type VerificationChannel = 'sms' | 'whatsapp' | 'email';
+type VerificationChannel = 'whatsapp' | 'email';
 
 export const ForgotPasswordView: React.FC<ForgotPasswordViewProps> = ({
   onBackToLogin,
@@ -33,7 +33,7 @@ export const ForgotPasswordView: React.FC<ForgotPasswordViewProps> = ({
   const styles = useMemo(() => getStyles(Palette), [Palette]);
   const [resetType, setResetType] = useState<ResetType>('password');
   const [identity, setIdentity] = useState('803 459 2811');
-  const [selectedChannel, setSelectedChannel] = useState<VerificationChannel>('sms');
+  const [selectedChannel, setSelectedChannel] = useState<VerificationChannel>('whatsapp');
   const [loading, setLoading] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
@@ -55,11 +55,7 @@ export const ForgotPasswordView: React.FC<ForgotPasswordViewProps> = ({
       Alert.alert(
         'Verification Code Sent',
         `A 6-digit recovery code has been dispatched via ${
-          selectedChannel === 'sms'
-            ? 'SMS'
-            : selectedChannel === 'whatsapp'
-            ? 'WhatsApp'
-            : 'Email'
+          selectedChannel === 'whatsapp' ? 'WhatsApp' : 'Email'
         } to your registered contact.`
       );
     }, 1000);
@@ -82,7 +78,14 @@ export const ForgotPasswordView: React.FC<ForgotPasswordViewProps> = ({
   };
 
   const openHelpDesk = () => {
-    Linking.openURL('https://wa.me/2348034592811?text=Hello%20AbbaKano%20Support%2C%20I%20need%20account%20recovery%20assistance');
+    Linking.openURL(
+      'https://wa.me/2348166774566?text=Hello%20AbbaKano%20Support%2C%20I%20need%20account%20recovery%20assistance'
+    ).catch(() => {
+      Alert.alert(
+        'Error',
+        'Unable to open WhatsApp. Please contact +2348166774566 directly.'
+      );
+    });
   };
 
   return (
@@ -209,41 +212,7 @@ export const ForgotPasswordView: React.FC<ForgotPasswordViewProps> = ({
               </View>
 
               <View style={styles.channelGroup}>
-                {/* Option 1: SMS */}
-                <Pressable
-                  style={[
-                    styles.channelCard,
-                    selectedChannel === 'sms' && styles.channelCardActive,
-                  ]}
-                  onPress={() => setSelectedChannel('sms')}
-                >
-                  <View style={styles.channelLeft}>
-                    <View style={[styles.channelIconBox, styles.smsIconBox]}>
-                      <MaterialIcons name="sms" size={22} color={Palette.primary} />
-                    </View>
-                    <View style={styles.channelInfo}>
-                      <View style={styles.channelTitleRow}>
-                        <Text style={styles.channelTitle}>SMS Verification OTP</Text>
-                        <View style={styles.instantBadge}>
-                          <Text style={styles.instantBadgeText}>Instant 10s</Text>
-                        </View>
-                      </View>
-                      <Text style={styles.channelTarget}>+234 803 *** 2811</Text>
-                    </View>
-                  </View>
-                  <View
-                    style={[
-                      styles.indicatorCircle,
-                      selectedChannel === 'sms' && styles.indicatorCircleActive,
-                    ]}
-                  >
-                    {selectedChannel === 'sms' && (
-                      <MaterialIcons name="check" size={16} color="#FFFFFF" />
-                    )}
-                  </View>
-                </Pressable>
-
-                {/* Option 2: WhatsApp */}
+                {/* Option 1: WhatsApp */}
                 <Pressable
                   style={[
                     styles.channelCard,
@@ -253,13 +222,13 @@ export const ForgotPasswordView: React.FC<ForgotPasswordViewProps> = ({
                 >
                   <View style={styles.channelLeft}>
                     <View style={[styles.channelIconBox, styles.waIconBox]}>
-                      <MaterialIcons name="chat" size={22} color={Palette.secondary} />
+                      <MaterialCommunityIcons name="whatsapp" size={24} color="#25D366" />
                     </View>
                     <View style={styles.channelInfo}>
                       <View style={styles.channelTitleRow}>
                         <Text style={styles.channelTitle}>WhatsApp Direct Code</Text>
                         <View style={styles.highDeliveryBadge}>
-                          <Text style={styles.highDeliveryBadgeText}>High Delivery</Text>
+                          <Text style={styles.highDeliveryBadgeText}>Instant Delivery</Text>
                         </View>
                       </View>
                       <Text style={styles.channelTarget}>+234 803 *** 2811</Text>
@@ -277,7 +246,7 @@ export const ForgotPasswordView: React.FC<ForgotPasswordViewProps> = ({
                   </View>
                 </Pressable>
 
-                {/* Option 3: Email */}
+                {/* Option 2: Email */}
                 <Pressable
                   style={[
                     styles.channelCard,
@@ -696,11 +665,8 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  smsIconBox: {
-    backgroundColor: 'rgba(37,99,235,0.15)',
-  },
   waIconBox: {
-    backgroundColor: 'rgba(238,152,0,0.15)',
+    backgroundColor: 'rgba(37,211,102,0.15)',
   },
   emailIconBox: {
     backgroundColor: Palette.surfaceHigh,

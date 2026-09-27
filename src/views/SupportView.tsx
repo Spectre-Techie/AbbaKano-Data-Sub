@@ -64,21 +64,24 @@ export const SupportView: React.FC<SupportViewProps> = ({ onBackPress }) => {
 
   const handleEmail = () => {
     Linking.openURL(
-      "mailto:support@abbakano.com?subject=AbbaKano%20Support%20Request",
+      "mailto:abbakanocommunicationcenter@gmail.com?subject=AbbaKano%20Support%20Request",
     ).catch(() => {
       Alert.alert(
         "Error",
-        "Unable to open email client. Please email support@abbakano.com.",
+        "Unable to open email client. Please email abbakanocommunicationcenter@gmail.com.",
       );
     });
   };
 
   const handleJoinCommunity = () => {
-    Alert.alert(
-      "WhatsApp Community Launching Soon",
-      "Our official WhatsApp Community group is currently being finalized. Once ready, you will be able to join right here to receive real-time price updates, server status alerts, and promo broadcasts.",
-      [{ text: "OK", style: "default" }]
-    );
+    Linking.openURL(
+      "https://chat.whatsapp.com/CqV5N2OeqEx2fBBfExeAgN?s=sw&p=a&mlu=4&ilr=4",
+    ).catch(() => {
+      Alert.alert(
+        "Error",
+        "Unable to open WhatsApp community link. Please ensure WhatsApp is installed.",
+      );
+    });
   };
 
   const toggleFaq = (index: number) => {
@@ -160,7 +163,7 @@ export const SupportView: React.FC<SupportViewProps> = ({ onBackPress }) => {
             <MaterialCommunityIcons name="whatsapp" size={18} color="#FFFFFF" />
             <Text style={styles.communityBtnText}>Join WhatsApp Community</Text>
             <View style={styles.communityPill}>
-              <Text style={styles.communityPillText}>Available Soon</Text>
+              <Text style={styles.communityPillText}>Join Group</Text>
             </View>
           </Pressable>
         </View>
@@ -208,7 +211,7 @@ export const SupportView: React.FC<SupportViewProps> = ({ onBackPress }) => {
             styles.channelCard,
             pressed && styles.cardPressed,
           ]}
-          onPress={() => handlePhoneCall("+2348166774566")}
+          onPress={() => handlePhoneCall("+2348163442154")}
         >
           <View
             style={[
@@ -225,7 +228,7 @@ export const SupportView: React.FC<SupportViewProps> = ({ onBackPress }) => {
           <View style={styles.channelInfo}>
             <Text style={styles.channelTitle}>Hotline 1 (Primary)</Text>
             <Text style={styles.channelSubtitle}>
-              +2348166774566 • Direct Phone Call
+              +2348163442154 • Direct Phone Call
             </Text>
           </View>
           <MaterialIcons
@@ -235,50 +238,7 @@ export const SupportView: React.FC<SupportViewProps> = ({ onBackPress }) => {
           />
         </Pressable>
 
-        {/* Channel 3: Phone Hotline 2 */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.channelCard,
-            pressed && styles.cardPressed,
-          ]}
-          onPress={() => {
-            Alert.alert(
-              "Hotline 2 Unavailable",
-              "Hotline 2 is currently undergoing system upgrades. Please contact our primary Hotline 1 or reach out on WhatsApp for immediate assistance."
-            );
-          }}
-        >
-          <View
-            style={[
-              styles.channelIconBox,
-              { backgroundColor: "rgba(238, 152, 0, 0.15)" },
-            ]}
-          >
-            <MaterialIcons
-              name="support-agent"
-              size={22}
-              color={Palette.secondary}
-            />
-          </View>
-          <View style={styles.channelInfo}>
-            <View style={styles.channelTitleRow}>
-              <Text style={styles.channelTitle}>Hotline 2 (Agent Desk)</Text>
-              <View style={styles.soonTag}>
-                <Text style={styles.soonTagText}>AVAILABLE SOON</Text>
-              </View>
-            </View>
-            <Text style={styles.channelSubtitle}>
-              Wholesale & KYC Agent Desk
-            </Text>
-          </View>
-          <MaterialIcons
-            name="chevron-right"
-            size={24}
-            color={Palette.onSurfaceMuted}
-          />
-        </Pressable>
-
-        {/* Channel 4: Email Inquiries */}
+        {/* Channel 3: Email Inquiries */}
         <Pressable
           style={({ pressed }) => [
             styles.channelCard,
@@ -297,7 +257,7 @@ export const SupportView: React.FC<SupportViewProps> = ({ onBackPress }) => {
           <View style={styles.channelInfo}>
             <Text style={styles.channelTitle}>Email Inquiries</Text>
             <Text style={styles.channelSubtitle}>
-              support@abbakano.com • In-depth receipts
+              abbakanocommunicationcenter@gmail.com • In-depth receipts
             </Text>
           </View>
           <MaterialIcons

@@ -53,7 +53,7 @@ const SCREEN_CATALOG: ScreenCatalogItem[] = [
     title: 'Forgot Password & Reset PIN',
     category: 'Auth & Onboarding',
     darkAsset: SCREEN_ASSETS.forgotPasswordResetPinDark,
-    description: 'Multi-channel OTP recovery (SMS, WhatsApp, Email) and 256-bit encrypted reset.',
+    description: 'Multi-channel OTP recovery (WhatsApp, Email) and 256-bit encrypted reset.',
   },
   {
     id: 'app_lock',

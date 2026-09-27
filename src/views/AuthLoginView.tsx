@@ -9,6 +9,8 @@ import {
   Platform,
   ScrollView,
   Image,
+  Linking,
+  Alert,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { PaletteType, Rounded, Spacing, Typography } from '@/constants/theme';
@@ -42,6 +44,17 @@ export const AuthLoginView: React.FC<AuthLoginViewProps> = ({
       setPassword('');
       onLoginSuccess();
     }, 1000);
+  };
+
+  const handleWhatsAppSupport = () => {
+    Linking.openURL(
+      'https://wa.me/2348166774566?text=Hello%20AbbaKano%20Support%2C%20I%20need%20assistance%20logging%20into%20my%20account.'
+    ).catch(() => {
+      Alert.alert(
+        'Error',
+        'Unable to open WhatsApp. Please contact +2348166774566 directly.'
+      );
+    });
   };
 
   return (
@@ -189,11 +202,15 @@ export const AuthLoginView: React.FC<AuthLoginViewProps> = ({
           </Pressable>
         </View>
 
-        <View style={styles.supportRow}>
+        <Pressable
+          style={({ pressed }) => [styles.supportRow, pressed && { opacity: 0.7 }]}
+          onPress={handleWhatsAppSupport}
+          hitSlop={10}
+        >
           <Text style={styles.footerText}>Need help?{' '}</Text>
-          <MaterialIcons name="chat" size={14} color={Palette.tertiary} />
+          <MaterialCommunityIcons name="whatsapp" size={16} color="#25D366" />
           <Text style={styles.supportLink}> Contact WhatsApp Support</Text>
-        </View>
+        </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>
   );
