@@ -7,6 +7,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { AppProvider, useApp } from '@/context/AppContext';
+import { AuthProvider } from '@/context/AuthContext';
 import { CheckoutProvider } from '@/context/CheckoutContext';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -86,10 +87,12 @@ export default function RootLayout() {
   }
 
   return (
-    <AppProvider>
-      <CheckoutProvider>
-        <ThemedNavigationShell />
-      </CheckoutProvider>
-    </AppProvider>
+    <AuthProvider>
+      <AppProvider>
+        <CheckoutProvider>
+          <ThemedNavigationShell />
+        </CheckoutProvider>
+      </AppProvider>
+    </AuthProvider>
   );
 }

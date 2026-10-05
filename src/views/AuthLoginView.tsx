@@ -15,6 +15,8 @@ import {
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { PaletteType, Rounded, Spacing, Typography } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
+import { useAuth } from '@/context/AuthContext';
+import { ApiError } from '@/lib/api';
 import { SCREEN_ASSETS } from '../../assets/screenAssets';
 
 interface AuthLoginViewProps {
@@ -29,21 +31,32 @@ export const AuthLoginView: React.FC<AuthLoginViewProps> = ({
   onForgotPasswordPress,
 }) => {
   const { theme: Palette } = useApp();
+  const { login, biometricLogin } = useAuth();
   const styles = useMemo(() => getStyles(Palette), [Palette]);
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberDevice, setRememberDevice] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
+    if (!identifier.trim() || !password) {
+      setErrorMessage('Please enter your phone/email and password.');
+      return;
+    }
+    setErrorMessage(null);
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      await login(identifier.trim(), password);
       setIdentifier('');
       setPassword('');
       onLoginSuccess();
-    }, 1000);
+    } catch (err) {
+      setErrorMessage(err instanceof ApiError ? err.message : 'Sign in failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleWhatsAppSupport = () => {
@@ -55,6 +68,19 @@ export const AuthLoginView: React.FC<AuthLoginViewProps> = ({
         'Unable to open WhatsApp. Please contact +2348166774566 directly.'
       );
     });
+  };
+
+  const handleBiometricLogin = async () => {
+    setErrorMessage(null);
+    setLoading(true);
+    try {
+      await biometricLogin();
+      onLoginSuccess();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Biometric sign-in could not be completed.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -164,6 +190,11 @@ export const AuthLoginView: React.FC<AuthLoginViewProps> = ({
 
         {/* === CTA === */}
         <View style={styles.ctaSection}>
+          {!!errorMessage && (
+            <View style={{ backgroundColor: '#4e0000', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+              <Text style={{ color: '#FF8A80', fontSize: 13, textAlign: 'center' }}>{errorMessage}</Text>
+            </View>
+          )}
           <Pressable
             style={({ pressed }) => [
               styles.primaryBtn,
@@ -175,10 +206,11 @@ export const AuthLoginView: React.FC<AuthLoginViewProps> = ({
           >
             <View style={styles.securedRow}>
               <MaterialIcons name="verified-user" size={16} color="#FFFFFF" />
-              <Text style={styles.securedText}>Secured Sign In to Wallet</Text>
+              <Text style={styles.securedText}>{loading ? 'Signing in...' : 'Secured Sign In to Wallet'}</Text>
             </View>
             {!loading && <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />}
           </Pressable>
+
 
           {/* Divider */}
           <View style={styles.orRow}>
@@ -188,7 +220,7 @@ export const AuthLoginView: React.FC<AuthLoginViewProps> = ({
           </View>
 
           {/* Biometrics */}
-          <Pressable style={styles.biometricBtn}>
+          <Pressable style={styles.biometricBtn} onPress={() => void handleBiometricLogin()} disabled={loading}>
             <MaterialIcons name="fingerprint" size={24} color={Palette.primary} />
             <Text style={styles.biometricBtnText}>Sign In with Biometrics</Text>
           </Pressable>

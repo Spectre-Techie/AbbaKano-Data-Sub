@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp, useTheme } from '@/context/AppContext';
+import { useAuth } from '@/context/AuthContext';
 import { AppBottomNav, AppTabKey } from '@/components/navigation/AppBottomNav';
 import { DashboardView } from '@/views/DashboardView';
 import { VtuView } from '@/views/VtuView';
@@ -24,13 +25,18 @@ import { ForgotPasswordView } from '@/views/ForgotPasswordView';
 // Global Transaction Overlays
 import { CheckoutSheet } from '@/components/modals/CheckoutSheet';
 import { PinAuthModal } from '@/components/modals/PinAuthModal';
+import { saveBiometricTransactionPin } from '@/services/biometricService';
+import { supabase } from '@/lib/supabase';
 import { ReceiptModal } from '@/components/modals/ReceiptModal';
 
 type AuthState = 'authenticated' | 'welcome' | 'login' | 'register' | 'pin_setup' | 'forgot_password';
 type DedicatedService = 'airtime' | 'electricity' | 'cable' | null;
 
 export default function App() {
-  const [authState, setAuthState] = useState<AuthState>('authenticated');
+  const { user, isLoading: authLoading, isPasswordRecovery, logout } = useAuth();
+  // Derive initial auth screen from token hydration
+  const [authState, setAuthState] = useState<AuthState>('welcome');
+  const [changingPin, setChangingPin] = useState(false);
   const [activeTab, setActiveTab] = useState<AppTabKey>('home');
   const [activeDedicatedService, setActiveDedicatedService] = useState<DedicatedService>(null);
   const [showFundWallet, setShowFundWallet] = useState(false);
@@ -39,8 +45,14 @@ export default function App() {
 
   const { effectiveTheme } = useApp();
   const T = useTheme();
-
   const bg = { backgroundColor: T.canvas };
+
+  // When auth hydration resolves, update authState
+  useEffect(() => {
+    if (!authLoading) {
+      setAuthState(isPasswordRecovery ? 'forgot_password' : user ? 'authenticated' : 'welcome');
+    }
+  }, [authLoading, user, isPasswordRecovery]);
 
   const handleSelectService = (serviceKey: string) => {
     setShowFundWallet(false);
@@ -67,6 +79,17 @@ export default function App() {
     setActiveDedicatedService(null);
     setActiveTab(tab);
   };
+
+  // Show a loading screen while we hydrate auth from storage
+  if (authLoading) {
+    return (
+      <SafeAreaView style={[styles.fill, bg]}>
+        <View style={[styles.fill, styles.centered, bg]}>
+          <ActivityIndicator size="large" color={T.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   // ── Auth screens — use effectiveTheme as key so re-mounting picks up T.canvas ──
   if (authState === 'welcome') {
@@ -114,7 +137,16 @@ export default function App() {
     return (
       <SafeAreaView key={effectiveTheme} style={[styles.fill, bg]}>
         <AuthPinSetupView
-          onPinCompleted={() => {
+          requireCurrentPin={changingPin}
+          onPinCompleted={async (pin, currentPin) => {
+            if (changingPin) {
+              const { error } = await supabase.functions.invoke('update-transaction-pin', {
+                body: { newPin: pin, currentPin },
+              });
+              if (error) throw error;
+            }
+            await saveBiometricTransactionPin(pin);
+            setChangingPin(false);
             setActiveTab('home');
             setAuthState('authenticated');
           }}
@@ -168,8 +200,12 @@ export default function App() {
                 onNavigateToReferEarn={() => setShowReferEarn(true)}
                 onNavigateToFundWallet={() => setShowFundWallet(true)}
                 onNavigateToSupport={() => setShowSupport(true)}
-                onNavigateToPinSetup={() => setAuthState('pin_setup')}
-                onSignOut={() => {
+                onNavigateToPinSetup={() => {
+                  setChangingPin(true);
+                  setAuthState('pin_setup');
+                }}
+                onSignOut={async () => {
+                  await logout();
                   setActiveTab('home');
                   setShowFundWallet(false);
                   setShowReferEarn(false);
@@ -195,4 +231,5 @@ export default function App() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  centered: { alignItems: 'center', justifyContent: 'center' },
 });

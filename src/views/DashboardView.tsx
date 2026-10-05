@@ -88,7 +88,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     if (onNavigateToSupport) {
       onNavigateToSupport();
     } else {
-      Linking.openURL('https://wa.me/2348034992810');
+      Linking.openURL('https://wa.me/2348166774566');
     }
   };
 
@@ -113,7 +113,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <Text style={styles.welcomeLabel}>Welcome back,</Text>
             <View style={styles.welcomeGreetingRow}>
               <Text style={styles.welcomeGreeting}>
-                {user.name.split(' ')[0]}
+                {(user.name || user.fullName || 'there').split(' ')[0]}
               </Text>
               <MaterialCommunityIcons name="hand-wave-outline" size={18} color={Palette.secondaryLight} />
             </View>
@@ -511,7 +511,7 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
   vtuHubGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.three,
+    gap: 10,
   },
   vtuHubCard: {
     width: '48%',

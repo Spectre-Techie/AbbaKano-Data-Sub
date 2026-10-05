@@ -9,10 +9,13 @@ import {
   Platform,
   ScrollView,
   Image,
+  Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { PaletteType, Rounded, Spacing, Typography } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
+import { useAuth } from '@/context/AuthContext';
+import { ApiError } from '@/lib/api';
 import { SCREEN_ASSETS } from '../../assets/screenAssets';
 
 interface AuthRegisterViewProps {
@@ -24,7 +27,8 @@ export const AuthRegisterView: React.FC<AuthRegisterViewProps> = ({
   onRegisterSuccess,
   onLoginPress,
 }) => {
-  const { theme: Palette, updateUserProfile } = useApp();
+  const { theme: Palette, refreshData } = useApp();
+  const { register } = useAuth();
   const styles = useMemo(() => getStyles(Palette), [Palette]);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -53,7 +57,7 @@ export const AuthRegisterView: React.FC<AuthRegisterViewProps> = ({
   };
   const detectedNetwork = detectNetwork(phone.replace(/\s/g, ''));
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     setErrorMessage(null);
     if (!fullName.trim()) {
       setErrorMessage('Please enter your full name.');
@@ -89,14 +93,16 @@ export const AuthRegisterView: React.FC<AuthRegisterViewProps> = ({
     }
 
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      updateUserProfile({
-        name: fullName.trim(),
+    try {
+      await register({
+        fullName: fullName.trim(),
         phone: phone.trim(),
         email: email.trim() || undefined,
-        referralCode: phone.trim().replace(/[^0-9]/g, ''),
+        password,
+        pin,
+        referralCode: referralCode.trim() || undefined,
       });
+      await refreshData();
       setFullName('');
       setPhone('');
       setEmail('');
@@ -107,7 +113,11 @@ export const AuthRegisterView: React.FC<AuthRegisterViewProps> = ({
       setReferralCode('');
       setTermsAccepted(false);
       onRegisterSuccess();
-    }, 1200);
+    } catch (err) {
+      setErrorMessage(err instanceof ApiError ? err.message : 'Registration failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

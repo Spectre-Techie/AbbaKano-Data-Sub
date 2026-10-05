@@ -1,11 +1,13 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
+import { Alert, Linking, View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Rounded, Spacing, Typography } from '@/constants/theme';
 import { useApp, useTheme } from '@/context/AppContext';
 import { ThemeSwitchModal } from '@/components/common/ThemeSwitchModal';
 import { ScreenHeader } from '@/components/common/ScreenHeader';
 import { SignOutModal } from '@/components/common/SignOutModal';
+import { authenticateBiometric } from '@/services/biometricService';
+import { useAuth } from '@/context/AuthContext';
 
 interface ProfileViewProps {
   onNavigateToReferEarn?: () => void;
@@ -23,15 +25,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onSignOut,
 }) => {
   const { user, mainBalance, themePreference, effectiveTheme } = useApp();
+  const { deleteAccount } = useAuth();
   const T = useTheme();
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [biometrics, setBiometrics] = useState(true);
   const [appLock, setAppLock] = useState(true);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const menuItems = useMemo(() => [
-    { id: 'beneficiaries', icon: 'contacts', title: 'Saved Beneficiaries', subtitle: 'Manage frequent numbers for MTN, Airtel, Glo, 9mobile', section: 'Account' },
-    { id: 'refer', icon: 'card-giftcard', title: 'Refer & Earn', subtitle: "Earn ₦200 for each friend's first data top-up", badge: '₦200 BONUS', section: 'Referral & Rewards' },
+    { id: 'refer', icon: 'card-giftcard', title: 'Refer & Earn', subtitle: "Earn ₦100 for each friend's first data top-up", badge: '₦100 BONUS', section: 'Referral & Rewards' },
     { id: 'change_pin', icon: 'pin', title: 'Change Transaction PIN', subtitle: '4-digit wallet security PIN', section: 'Security & Preferences' },
     { id: 'biometrics', icon: 'fingerprint', title: 'Biometrics Login', subtitle: 'Face ID / Fingerprint unlock', section: 'Security & Preferences', hasToggle: true },
     { id: 'app_lock', icon: 'lock', title: 'App Lock PIN', subtitle: 'Screen lock security timeout', section: 'Security & Preferences', hasToggle: true },
@@ -47,7 +50,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       hasToggle: false,
     },
     { id: 'support', icon: 'support-agent', title: 'Contact Support', subtitle: '24/7 WhatsApp & in-app chat', section: 'Help & Support' },
-    { id: 'about', icon: 'info', title: 'About AbbaKano', subtitle: 'Version 1.0.0 • Build 2025.02.25', section: 'Help & Support' },
+    { id: 'privacy', icon: 'privacy-tip', title: 'Privacy Policy', subtitle: 'How your personal information is handled', section: 'Help & Support' },
+    { id: 'terms', icon: 'description', title: 'Terms and Conditions', subtitle: 'The terms for using AbbaKano', section: 'Help & Support' },
+    { id: 'delete_account', icon: 'delete-outline', title: 'Delete Account', subtitle: 'Permanently delete your AbbaKano account', section: 'Account Actions', danger: true },
     { id: 'logout', icon: 'logout', title: 'Sign Out', subtitle: 'Exit your wallet session safely', section: 'Account Actions', danger: true },
   ], [themePreference, effectiveTheme]);
 
@@ -57,8 +62,15 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     return false;
   };
 
-  const handleToggle = (id: string) => {
-    if (id === 'biometrics') setBiometrics((v) => !v);
+  const handleToggle = async (id: string) => {
+    if (id === 'biometrics') {
+      try {
+        await authenticateBiometric('Enable biometric security');
+        setBiometrics((v) => !v);
+      } catch {
+        // The system biometric prompt already explains why the action was not completed.
+      }
+    }
     else if (id === 'app_lock') setAppLock((v) => !v);
   };
 
@@ -69,10 +81,45 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     else if (id === 'support') {
       if (onNavigateToSupport) onNavigateToSupport();
     }
+    else if (id === 'privacy') {
+      void Linking.openURL('https://www.abbakanodatasub.com.ng/privacy').catch(() => {
+        Alert.alert('Could not open page', 'Please try again or visit abbakanodatasub.com.ng/privacy in your browser.');
+      });
+    }
+    else if (id === 'terms') {
+      void Linking.openURL('https://www.abbakanodatasub.com.ng/terms').catch(() => {
+        Alert.alert('Could not open page', 'Please try again or visit abbakanodatasub.com.ng/terms in your browser.');
+      });
+    }
+    else if (id === 'delete_account') {
+      Alert.alert(
+        'Delete your account?',
+        'This permanently removes your AbbaKano account and signs you out. Some transaction records may need to be retained for legal or accounting purposes. This action cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete Account',
+            style: 'destructive',
+            onPress: () => {
+              void (async () => {
+                setDeletingAccount(true);
+                try {
+                  await deleteAccount();
+                } catch (error) {
+                  Alert.alert(
+                    'Account deletion failed',
+                    error instanceof Error ? error.message : 'Please try again or contact support.',
+                  );
+                  setDeletingAccount(false);
+                }
+              })();
+            },
+          },
+        ],
+      );
+    }
     else if (id === 'logout') {
       setShowSignOutModal(true);
-    } else {
-      Alert.alert('Coming Soon', 'This feature will be available in the next update.');
     }
   };
 
@@ -102,7 +149,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             <View style={styles.avatarWrapper}>
               <View style={[styles.avatarCircle, { backgroundColor: T.primaryContainer }]}>
                 <Text style={styles.avatarInitials}>
-                  {user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                  {(user.name || user.fullName || 'User').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                 </Text>
               </View>
               <View style={[styles.onlineRing, { backgroundColor: T.tertiary, borderColor: T.surfaceLow }]} />
@@ -110,7 +157,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
             <View style={styles.profileInfo}>
               <View style={styles.nameRow}>
-                <Text style={[styles.profileName, { color: T.onSurface }]}>{user.name}</Text>
+                <Text style={[styles.profileName, { color: T.onSurface }]}>{user.name || user.fullName || 'User'}</Text>
               </View>
               <Text style={[styles.profileContact, { color: T.onSurfaceVariant, marginTop: 4 }]}>
                 +234 803 459 2811 • {user.email}
@@ -150,6 +197,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               {items.map((item, idx) => (
                 <Pressable
                   key={item.id}
+                  disabled={item.id === 'delete_account' && deletingAccount}
                   style={({ pressed }) => [
                     styles.menuItem,
                     idx < items.length - 1 && [styles.menuItemBorder, { borderBottomColor: T.border }],
@@ -166,7 +214,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   <View style={styles.menuItemInfo}>
                     <View style={styles.menuItemTitleRow}>
                       <Text style={[styles.menuItemTitle, { color: item.danger ? T.error : T.onSurface }]}>
-                        {item.title}
+                        {item.id === 'delete_account' && deletingAccount ? 'Deleting...' : item.title}
                       </Text>
                       {item.badge && (
                         <View style={styles.menuBadge}>

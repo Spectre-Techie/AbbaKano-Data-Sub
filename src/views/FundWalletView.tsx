@@ -2,6 +2,7 @@ import { ScreenHeader } from "@/components/common/ScreenHeader";
 import { PaletteType, Rounded, Spacing, Typography } from "@/constants/theme";
 import { useApp } from "@/context/AppContext";
 import { MaterialIcons } from "@expo/vector-icons";
+import * as WebBrowser from 'expo-web-browser';
 import React, { useMemo, useState } from "react";
 import {
   Alert,
@@ -11,10 +12,17 @@ import {
   Text,
   View,
 } from "react-native";
+import { supabase } from '@/lib/supabase';
+import { FormInput } from '@/components/common/FormInput';
 
 interface FundWalletViewProps {
   onBackPress?: () => void;
 }
+
+type PaystackResponse = {
+  authorization_url?: string;
+  authorizationUrl?: string;
+};
 
 export const FundWalletView: React.FC<FundWalletViewProps> = ({
   onBackPress,
@@ -23,6 +31,39 @@ export const FundWalletView: React.FC<FundWalletViewProps> = ({
   const styles = useMemo(() => getStyles(Palette), [Palette]);
   const [copiedAccount, setCopiedAccount] = useState<string | null>(null);
   const [gatewayExpanded, setGatewayExpanded] = useState(false);
+  const [amount, setAmount] = useState('1000');
+  const [isStartingPayment, setIsStartingPayment] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  const startPaystack = async () => {
+    const value = Number(amount);
+    if (!Number.isInteger(value) || value < 100 || value > 1000000) {
+      setPaymentError('Enter an amount between ₦100 and ₦1,000,000.');
+      return;
+    }
+    setIsStartingPayment(true);
+    setPaymentError(null);
+    try {
+      const paymentResult = await supabase.functions.invoke(
+        'initialize-paystack',
+        { body: { amount: value } }
+      );
+      const response = paymentResult.data;
+      const error = paymentResult.error;
+      if (error) throw error;
+      const paystackResponse = response as PaystackResponse | null;
+      const authorizationUrl = paystackResponse?.authorization_url || paystackResponse?.authorizationUrl;
+      if (!authorizationUrl) throw new Error('We could not start your payment. Please try again.');
+      await WebBrowser.openBrowserAsync(authorizationUrl);
+    } catch (error) {
+      console.error('Could not start wallet funding:', error);
+      setPaymentError(error instanceof Error && error.message.startsWith('We could not')
+        ? error.message
+        : 'Could not start payment. Please try again.');
+    } finally {
+      setIsStartingPayment(false);
+    }
+  };
 
   const handleCopy = (accountNumber: string, displayNumber: string) => {
     // On native we'd use Clipboard, here we simulate
@@ -205,15 +246,25 @@ export const FundWalletView: React.FC<FundWalletViewProps> = ({
                 Tap below to initiate a secure card or bank transfer via
                 Paystack. Minimum ₦100.
               </Text>
+              <FormInput
+                label="Amount to fund (₦)"
+                value={amount}
+                onChangeText={setAmount}
+                keyboardType="numeric"
+                leftIcon={<MaterialIcons name="payments" size={18} color={Palette.onSurfaceMuted} />}
+              />
+              {paymentError && <Text style={styles.gatewayContentNote}>{paymentError}</Text>}
               <Pressable
                 style={({ pressed }) => [
                   styles.paystackBtn,
                   pressed && { opacity: 0.85 },
                 ]}
+                onPress={() => void startPaystack()}
+                disabled={isStartingPayment}
               >
                 <MaterialIcons name="lock" size={20} color="#FFFFFF" />
                 <Text style={styles.paystackBtnText}>
-                  Proceed to Secure Checkout
+                  {isStartingPayment ? 'Opening Checkout...' : 'Proceed to Secure Checkout'}
                 </Text>
               </Pressable>
             </View>

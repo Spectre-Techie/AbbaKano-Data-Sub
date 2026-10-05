@@ -1,14 +1,15 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import React, { useState, useMemo, useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { PaletteType, Rounded, Spacing } from '@/constants/theme';
 import { TelcoNetworkId, TELCO_NETWORKS } from '@/constants/telco';
-import { MOCK_DATA_PLANS, DataPlan } from '@/constants/mockData';
 import { FormInput } from '@/components/common/FormInput';
 import { Button } from '@/components/common/Button';
 import { useTelcoDetector } from '@/hooks/useTelcoDetector';
 import { useCheckout } from '@/context/CheckoutContext';
 import { useApp } from '@/context/AppContext';
+import { DataPlan, fetchDataPlans } from '@/services/dataService';
+import { ApiError } from '@/lib/api';
 
 interface DataBundlePickerProps {
   initialNetwork?: TelcoNetworkId;
@@ -31,9 +32,12 @@ export const DataBundlePicker: React.FC<DataBundlePickerProps> = ({
     onSelectNetwork?.(net);
   };
 
-  const [dataType, setDataType] = useState<'SME' | 'CORPORATE' | 'DIRECT'>('SME');
+  const [dataType, setDataType] = useState<'GENERAL' | 'SME' | 'CORPORATE' | 'DIRECT'>('GENERAL');
   const [selectedPlanId, setSelectedPlanId] = useState<string>('mtn-sme-1gb');
   const [recipientNumber, setRecipientNumber] = useState('');
+  const [plans, setPlans] = useState<(DataPlan & { purchaseAvailable?: boolean })[]>([]);
+  const [plansLoading, setPlansLoading] = useState(true);
+  const [plansError, setPlansError] = useState<string | null>(null);
 
   const { detectedNetwork } = useTelcoDetector(recipientNumber);
   const { startCheckout, paymentSuccessCount } = useCheckout();
@@ -50,16 +54,38 @@ export const DataBundlePicker: React.FC<DataBundlePickerProps> = ({
     }
   }, [paymentSuccessCount]);
 
-  // Filter plans by selected network and data type
-  const availablePlans = MOCK_DATA_PLANS.filter(
-    (p) => p.network === selectedNetwork && (dataType === 'DIRECT' ? true : p.type === dataType)
-  );
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (cancelled) return;
+      setPlansLoading(true);
+      setPlansError(null);
+      return fetchDataPlans(selectedNetwork);
+    })
+      .then((response) => {
+        if (cancelled || !response) return;
+        setPlans(response.map((plan) => ({ ...plan, resellerDiscount: 0 })));
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setPlans([]);
+          setPlansError(error instanceof ApiError ? error.message : 'Could not load data plans.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPlansLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [selectedNetwork]);
+
+  const category = dataType === 'CORPORATE' ? 'GIFTING' : dataType;
+  const availablePlans = plans.filter((plan) => plan.planType.toUpperCase() === category);
 
   const activePlan = availablePlans.find((p) => p.id === selectedPlanId) || availablePlans[0];
   const netConfig = TELCO_NETWORKS[selectedNetwork];
 
   const handleBuy = () => {
-    if (!activePlan || recipientNumber.length < 11) return;
+    if (!activePlan || recipientNumber.length < 11 || (activePlan as DataPlan & { purchaseAvailable?: boolean }).purchaseAvailable === false) return;
 
     startCheckout({
       type: 'DATA',
@@ -70,6 +96,7 @@ export const DataBundlePicker: React.FC<DataBundlePickerProps> = ({
       planName: `${activePlan.dataAmount} (${activePlan.validity})`,
       amount: activePlan.price,
       fee: 0,
+      planToken: (activePlan as DataPlan & { planToken?: string }).planToken,
       onSuccess: clearInputs,
     });
   };
@@ -78,7 +105,7 @@ export const DataBundlePicker: React.FC<DataBundlePickerProps> = ({
     <View style={styles.container}>
       {/* Segmented Data Type Tabs */}
       <View style={styles.segmentContainer}>
-        {(['SME', 'CORPORATE', 'DIRECT'] as const).map((type) => {
+        {(['GENERAL', 'SME', 'CORPORATE', 'DIRECT'] as const).map((type) => {
           const isSelected = dataType === type;
           return (
             <Pressable
@@ -89,7 +116,7 @@ export const DataBundlePicker: React.FC<DataBundlePickerProps> = ({
               <Text
                 style={[styles.segmentBtnText, isSelected && styles.segmentBtnTextActive]}
               >
-                {type === 'SME' ? 'SME Data' : type === 'CORPORATE' ? 'Corp Gifting' : 'Direct Data'}
+                {type === 'GENERAL' ? 'General' : type === 'SME' ? 'SME Data' : type === 'CORPORATE' ? 'Corp Gifting' : 'Direct Data'}
               </Text>
             </Pressable>
           );
@@ -122,8 +149,10 @@ export const DataBundlePicker: React.FC<DataBundlePickerProps> = ({
 
       {/* Plan Selection Section */}
       <Text style={styles.plansSectionTitle}>
-        AVAILABLE {selectedNetwork} {dataType} PLANS
+        {plansLoading ? 'LOADING DATA PLANS...' : `AVAILABLE ${selectedNetwork} ${dataType} PLANS`}
       </Text>
+
+      {plansError && <Text style={styles.plansSectionTitle}>{plansError}</Text>}
 
       <View style={styles.plansGrid}>
         {availablePlans.map((plan) => {
@@ -149,7 +178,7 @@ export const DataBundlePicker: React.FC<DataBundlePickerProps> = ({
                 >
                   {plan.dataAmount}
                 </Text>
-                <Text style={styles.validityText}>{plan.validity}</Text>
+                <Text style={styles.validityText}>{plan.validity || 'Available'}</Text>
               </View>
 
               <View style={styles.planBottom}>
@@ -163,12 +192,14 @@ export const DataBundlePicker: React.FC<DataBundlePickerProps> = ({
       {/* Checkout Action Button */}
       <Button
         title={
-          activePlan
+          activePlan && (activePlan as DataPlan & { purchaseAvailable?: boolean }).purchaseAvailable === false
+            ? 'Purchases coming soon'
+            : activePlan
             ? `Buy ${activePlan.dataAmount} for ₦${activePlan.price.toLocaleString()}`
             : 'Select a Plan'
         }
         onPress={handleBuy}
-        disabled={!activePlan || recipientNumber.length < 11}
+        disabled={!activePlan || recipientNumber.length < 11 || plansLoading || (activePlan as DataPlan & { purchaseAvailable?: boolean }).purchaseAvailable === false}
         variant={selectedNetwork === 'GLO' ? 'emerald' : 'primary'}
         style={{ marginTop: Spacing.four }}
       />

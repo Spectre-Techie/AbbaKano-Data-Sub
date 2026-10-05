@@ -1,21 +1,19 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Appearance } from 'react-native';
 import {
-  UserProfile,
   VirtualAccount,
   TransactionRecord,
   KycTierInfo,
-  MOCK_USER,
-  MOCK_VIRTUAL_ACCOUNTS,
-  MOCK_TRANSACTIONS,
   MOCK_KYC_TIERS,
 } from '@/constants/mockData';
-import { getPalette, DarkPalette, setActiveThemeMode, PaletteType } from '@/constants/theme';
+import { getPalette, setActiveThemeMode, PaletteType } from '@/constants/theme';
+import { supabase } from '@/lib/supabase';
+import { useAuth, AuthUser } from './AuthContext';
 
 export type ThemePreference = 'system' | 'dark' | 'light';
 
 interface AppContextType {
-  user: UserProfile;
+  user: AuthUser;
   mainBalance: number;
   referralCommissionBalance: number;
   isBalanceMasked: boolean;
@@ -23,10 +21,9 @@ interface AppContextType {
   virtualAccounts: VirtualAccount[];
   transactions: TransactionRecord[];
   kycTiers: KycTierInfo[];
-  addTransaction: (tx: Omit<TransactionRecord, 'id' | 'timestamp'>) => TransactionRecord;
-  withdrawCommission: () => boolean;
-  updateKycTier: (tier: 'Tier 1' | 'Tier 2' | 'Tier 3') => void;
-  updateUserProfile: (profile: Partial<UserProfile>) => void;
+  refreshData: () => Promise<void>;
+  withdrawCommission: () => Promise<boolean>;
+  updateKycTier: (tier: KycTierInfo | KycTierInfo['tier']) => void;
   unreadNotifications: number;
   clearNotifications: () => void;
   // Theme
@@ -35,28 +32,67 @@ interface AppContextType {
   isDark: boolean;
   setThemePreference: (pref: ThemePreference) => void;
   cycleTheme: () => void;
-  /** Live palette that updates on theme change — use this in JSX inline styles */
   theme: PaletteType;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<UserProfile>(MOCK_USER);
-  const [mainBalance, setMainBalance] = useState<number>(14850.0);
-  const [referralCommissionBalance, setReferralCommissionBalance] = useState<number>(1200.0);
-  const [isBalanceMasked, setIsBalanceMasked] = useState<boolean>(false);
-  const [transactions, setTransactions] = useState<TransactionRecord[]>(MOCK_TRANSACTIONS);
-  const [kycTiers, setKycTiers] = useState<KycTierInfo[]>(MOCK_KYC_TIERS);
-  const [unreadNotifications, setUnreadNotifications] = useState<number>(3);
+function mapServerTx(tx: any): TransactionRecord {
+  const typeMap: Record<string, string> = {
+    deposit: 'FUND_WALLET',
+    data: 'DATA',
+    airtime: 'AIRTIME',
+    electricity: 'ELECTRICITY',
+    cable_tv: 'CABLE_TV',
+    commission: 'FUND_WALLET',
+  };
+  const statusMap: Record<string, string> = {
+    success: 'SUCCESSFUL',
+    pending: 'PENDING',
+    failed: 'FAILED',
+  };
+  return {
+    id: tx.id,
+    reference: tx.id,
+    type: (typeMap[tx.type] || 'DATA') as any,
+    title: tx.label || tx.type,
+    description: tx.label || '',
+    amount: tx.amount || 0,
+    fee: 0,
+    status: (statusMap[tx.status] || 'PENDING') as any,
+    date: tx.created_at ? new Date(tx.created_at).toLocaleDateString('en-NG') : 'Recently',
+    timestamp: tx.created_at ? new Date(tx.created_at).getTime() : Date.now(),
+    recipient: '',
+  };
+}
 
-  // ── Theme State ──────────────────────────────────────────────────────────────
+function mapServerVirtualAccount(raw: any): VirtualAccount {
+  return {
+    bankName: raw.bankName || raw.bank_name || 'Bank',
+    accountNumber: raw.accountNumber || raw.account_number || '',
+    accountName: raw.accountName || raw.account_name || '',
+    recommended: true,
+  };
+}
+
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+  const contextUser: AuthUser = user || { id: 'guest', name: 'Guest', phone: '', email: null, role: 'user' };
+
+  const [mainBalance, setMainBalance] = useState<number>(0);
+  const [referralCommissionBalance, setReferralCommissionBalance] = useState<number>(0);
+  const [isBalanceMasked, setIsBalanceMasked] = useState<boolean>(false);
+  const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
+  const [virtualAccounts, setVirtualAccounts] = useState<VirtualAccount[]>([]);
+  const [kycTiers, setKycTiers] = useState<KycTierInfo[]>(MOCK_KYC_TIERS);
+  const [unreadNotifications, setUnreadNotifications] = useState<number>(0);
+
+  // ── Theme State ──────────────────────────────────────────────────────────
   const [themePreference, setThemePreference] = useState<ThemePreference>('system');
   const [systemScheme, setSystemScheme] = useState<'dark' | 'light'>(
     Appearance.getColorScheme() === 'light' ? 'light' : 'dark'
   );
 
-  // Listen to OS theme changes in real-time
   useEffect(() => {
     const subscription = Appearance.addChangeListener(({ colorScheme }) => {
       setSystemScheme(colorScheme === 'light' ? 'light' : 'dark');
@@ -66,11 +102,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const effectiveTheme: 'dark' | 'light' =
     themePreference === 'system' ? systemScheme : themePreference;
-
-  // Immediately sync active theme mode for Proxy and helper utilities
   setActiveThemeMode(effectiveTheme);
-
-  /** Live palette object — re-computed on every effectiveTheme change */
   const theme = getPalette(effectiveTheme);
 
   const cycleTheme = () => {
@@ -81,92 +113,90 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  // ── Wallet Logic ─────────────────────────────────────────────────────────────
-  const toggleBalanceMask = () => setIsBalanceMasked((prev) => !prev);
+  // ── Fetch live data from backend ─────────────────────────────────────────
+  const refreshData = useCallback(async () => {
+    if (!user) return;
+    try {
+      const [walletRes, txRes, depositRes, referralRes] = await Promise.allSettled([
+        supabase.from('wallets').select('balance_kobo').eq('user_id', user.id).maybeSingle(),
+        supabase.from('vtu_transactions').select('id, transaction_type, amount_kobo, status, created_at, account_number').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
+        supabase.from('deposits').select('id, amount_kobo, status, created_at, reference').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
+        supabase.functions.invoke('referral-services', { body: { action: 'summary' } }),
+      ]);
 
-  const addTransaction = (txData: Omit<TransactionRecord, 'id' | 'timestamp'>): TransactionRecord => {
-    const newTx: TransactionRecord = {
-      ...txData,
-      id: `tx-${Date.now()}`,
-      timestamp: Date.now(),
-    };
-    setTransactions((prev) => [newTx, ...prev]);
-    if (newTx.type === 'FUND_WALLET') {
-      setMainBalance((prev) => prev + newTx.amount);
-    } else {
-      setMainBalance((prev) => Math.max(0, prev - newTx.amount));
-    }
-    return newTx;
-  };
-
-  const withdrawCommission = (): boolean => {
-    if (referralCommissionBalance <= 0) return false;
-    const amount = referralCommissionBalance;
-    const newTx: TransactionRecord = {
-      id: `tx-${Date.now()}`,
-      reference: `ABK-COMM-${Date.now().toString().slice(-6)}`,
-      type: 'FUND_WALLET',
-      title: 'Referral Commission Cashout',
-      description: 'Transferred commission balance into main wallet',
-      amount,
-      fee: 0,
-      status: 'SUCCESSFUL',
-      date: 'Just now',
-      timestamp: Date.now(),
-      recipient: 'Main Wallet',
-    };
-    setTransactions((prev) => [newTx, ...prev]);
-    setMainBalance((prev) => prev + amount);
-    setReferralCommissionBalance(0);
-    return true;
-  };
-
-  const updateKycTier = (tier: 'Tier 1' | 'Tier 2' | 'Tier 3') => {
-    setUser((prev) => ({
-      ...prev,
-      kycTier: tier,
-      tierLabel:
-        tier === 'Tier 3'
-          ? 'VIP Master Distributor'
-          : tier === 'Tier 2'
-          ? 'Tier 2 Verified Agent'
-          : 'Basic Starter',
-      agentDiscount: tier === 'Tier 3' ? 3.5 : tier === 'Tier 2' ? 2.5 : 1.0,
-    }));
-    setKycTiers((prev) => prev.map((t) => (t.tier === tier ? { ...t, status: 'active' } : t)));
-  };
-
-  const updateUserProfile = (profile: Partial<UserProfile>) => {
-    setUser((prev) => {
-      const updated = { ...prev, ...profile };
-      if (profile.phone && !profile.referralCode) {
-        // Referral code is now user's registered phone number
-        const cleanPhone = profile.phone.replace(/[^0-9]/g, '');
-        updated.referralCode = cleanPhone.startsWith('234') && cleanPhone.length > 10
-          ? '0' + cleanPhone.slice(3)
-          : cleanPhone;
+      if (walletRes.status === 'fulfilled' && !walletRes.value.error) {
+        setMainBalance(Number(walletRes.value.data?.balance_kobo || 0) / 100);
       }
-      return updated;
-    });
-  };
+      if (txRes.status === 'fulfilled' && !txRes.value.error) {
+        const vtuTransactions = (txRes.value.data || []).map((tx) => mapServerTx({
+          ...tx,
+          type: String(tx.transaction_type || '').toLowerCase(),
+          amount: Number(tx.amount_kobo || 0) / 100,
+          label: tx.account_number || tx.transaction_type,
+          reference: tx.id,
+        }));
+        const deposits = depositRes.status === 'fulfilled' && !depositRes.value.error
+          ? (depositRes.value.data || []).map((deposit) => mapServerTx({
+            ...deposit,
+            type: 'deposit',
+            amount: Number(deposit.amount_kobo || 0) / 100,
+            label: deposit.reference || 'Wallet funding',
+          }))
+          : [];
+        setTransactions([...vtuTransactions, ...deposits].sort((a, b) => b.timestamp - a.timestamp));
+      }
+      if (referralRes.status === 'fulfilled' && !referralRes.value.error) {
+        const referralData = referralRes.value.data as { referralCommissionBalance?: number } | null;
+        setReferralCommissionBalance(Number(referralData?.referralCommissionBalance || 0));
+      }
+    } catch {
+      // Keep previous state on error
+    }
+  }, [user]);
 
+  // Refresh when user logs in/out
+  useEffect(() => {
+    if (user) {
+      refreshData();
+    } else {
+      setMainBalance(0);
+      setTransactions([]);
+      setVirtualAccounts([]);
+    }
+  }, [user, refreshData]);
+
+  const toggleBalanceMask = () => setIsBalanceMasked((prev) => !prev);
   const clearNotifications = () => setUnreadNotifications(0);
+  const withdrawCommission = useCallback(async () => {
+    const { data, error } = await supabase.functions.invoke('referral-services', {
+      body: { action: 'withdraw' },
+    });
+    if (error) return false;
+    const result = data as { walletBalance?: number };
+    setReferralCommissionBalance(0);
+    if (typeof result?.walletBalance === 'number') setMainBalance(result.walletBalance);
+    return true;
+  }, []);
+  const updateKycTier = useCallback((tier: KycTierInfo | KycTierInfo['tier']) => {
+    setKycTiers((current) => typeof tier === 'string'
+      ? current.map((item) => item.tier === tier ? { ...item, status: 'active' } : item)
+      : current.map((item) => item.tier === tier.tier ? tier : item));
+  }, []);
 
   return (
     <AppContext.Provider
       value={{
-        user,
+        user: contextUser,
         mainBalance,
         referralCommissionBalance,
         isBalanceMasked,
         toggleBalanceMask,
-        virtualAccounts: MOCK_VIRTUAL_ACCOUNTS,
+        virtualAccounts,
         transactions,
         kycTiers,
-        addTransaction,
+        refreshData,
         withdrawCommission,
         updateKycTier,
-        updateUserProfile,
         unreadNotifications,
         clearNotifications,
         themePreference,
@@ -188,11 +218,6 @@ export function useApp() {
   return context;
 }
 
-/**
- * Convenience hook: returns just the live theme palette.
- * Use this inside any component that needs dynamic colors.
- * Example: const T = useTheme();  <View style={{ backgroundColor: T.canvas }} />
- */
 export function useTheme() {
   return useApp().theme;
 }

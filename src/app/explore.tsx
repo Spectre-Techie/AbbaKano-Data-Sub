@@ -125,7 +125,7 @@ const SCREEN_CATALOG: ScreenCatalogItem[] = [
     category: 'Settings & Rewards',
     lightAsset: SCREEN_ASSETS.referEarn,
     darkAsset: SCREEN_ASSETS.referEarnDark,
-    description: '₦200 bonus program, referral stats, share triggers, and one-tap wallet transfer.',
+    description: '₦100 bonus program, referral stats, share triggers, and one-tap wallet transfer.',
   },
 ];
 

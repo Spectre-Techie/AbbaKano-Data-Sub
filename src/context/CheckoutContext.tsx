@@ -1,7 +1,10 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useCallback } from 'react';
 import { TransactionRecord, TransactionType } from '@/constants/mockData';
 import { TelcoNetworkId } from '@/constants/telco';
+import { ApiError, createIdempotencyKey } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import { useApp } from './AppContext';
+import { authenticateBiometric, getBiometricTransactionPin } from '@/services/biometricService';
 
 export interface CheckoutDraft {
   type: TransactionType;
@@ -14,6 +17,12 @@ export interface CheckoutDraft {
   fee: number;
   billerName?: string;
   units?: string;
+  /** Backend-encoded plan token (from /vtu/plans or /vtu/service-plans) */
+  planToken?: string;
+  /** Meter / smartcard / decoder number for electricity & cable */
+  meterNumber?: string;
+  /** Electricity meter type (prepaid / postpaid) */
+  meterType?: string;
   onSuccess?: () => void;
 }
 
@@ -24,11 +33,13 @@ interface CheckoutContextType {
   paymentSuccessCount: number;
   draft: CheckoutDraft | null;
   activeReceipt: TransactionRecord | null;
+  purchaseError: string | null;
   startCheckout: (draft: CheckoutDraft) => void;
   closeSheet: () => void;
   proceedToPin: () => void;
   cancelPin: () => void;
-  verifyPinAndExecute: (pin: string) => boolean;
+  verifyPinAndExecute: (pin: string) => Promise<boolean>;
+  verifyBiometricAndExecute: () => Promise<boolean>;
   closeReceipt: () => void;
   quickRepeatLast: () => void;
 }
@@ -36,81 +47,138 @@ interface CheckoutContextType {
 const CheckoutContext = createContext<CheckoutContextType | undefined>(undefined);
 
 export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { addTransaction, mainBalance } = useApp();
+  const { refreshData } = useApp();
   const [draft, setDraft] = useState<CheckoutDraft | null>(null);
   const [paymentSuccessCount, setPaymentSuccessCount] = useState(0);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [activeReceipt, setActiveReceipt] = useState<TransactionRecord | null>(null);
+  const [purchaseError, setPurchaseError] = useState<string | null>(null);
 
   const startCheckout = (newDraft: CheckoutDraft) => {
     setDraft(newDraft);
+    setPurchaseError(null);
     setIsSheetOpen(true);
     setIsPinModalOpen(false);
     setIsReceiptOpen(false);
   };
 
-  const closeSheet = () => {
-    setIsSheetOpen(false);
-  };
+  const closeSheet = () => setIsSheetOpen(false);
 
   const proceedToPin = () => {
     setIsSheetOpen(false);
     setIsPinModalOpen(true);
   };
 
-  const cancelPin = () => {
-    setIsPinModalOpen(false);
-  };
+  const cancelPin = () => setIsPinModalOpen(false);
 
-  const verifyPinAndExecute = (pin: string): boolean => {
-    if (!draft) return false;
-    // Validate 4-digit PIN (allows any 4-digit entry in presentation mock)
-    if (pin.length !== 4) return false;
+  const verifyPinAndExecute = useCallback(async (pin: string): Promise<boolean> => {
+    if (!draft || pin.length !== 4) return false;
+    setPurchaseError(null);
 
-    // Generate random mock token for electricity or WAEC if applicable
-    let tokenCode: string | undefined = undefined;
-    if (draft.type === 'ELECTRICITY') {
-      const parts = Array.from({ length: 5 }, () => Math.floor(1000 + Math.random() * 9000));
-      tokenCode = parts.join(' - ');
-    }
+    try {
+      const typeToFunction: Record<TransactionType, string> = {
+        DATA: 'data-purchase',
+        AIRTIME: 'purchase-airtime',
+        ELECTRICITY: 'electricity-purchase',
+        CABLE_TV: 'cable-purchase',
+        FUND_WALLET: 'data-purchase',
+      };
 
-    const ref = `ABK-${draft.type.slice(0, 3)}-${Date.now().toString().slice(-7)}`;
-    const newTx = addTransaction({
-      reference: ref,
-      type: draft.type,
-      title: draft.title,
-      description: `${draft.serviceName} to ${draft.recipient}`,
-      amount: draft.amount,
-      fee: draft.fee,
-      status: 'SUCCESSFUL',
-      date: 'Just now',
-      network: draft.network,
-      recipient: draft.recipient,
-      billerName: draft.billerName,
-      token: tokenCode,
-      units: draft.units || (draft.type === 'ELECTRICITY' ? `${(draft.amount / 72.5).toFixed(1)} kWh` : undefined),
-    });
+      const functionName = typeToFunction[draft.type];
+      if (!functionName || draft.type === 'FUND_WALLET') return false;
 
-    if (draft.onSuccess) {
-      try {
-        draft.onSuccess();
-      } catch (err) {
-        console.warn('Error in draft onSuccess handler:', err);
+      const idempotencyKey = createIdempotencyKey();
+
+      // Build the body based on transaction type
+      const body: Record<string, unknown> = {
+        pin,
+        phone: draft.recipient,
+        amount: draft.amount,
+        network: draft.network?.toUpperCase(),
+        idempotencyKey,
+        selectionToken: draft.planToken,
+      };
+
+      if (draft.planToken) body.planToken = draft.planToken;
+      if (draft.meterNumber && draft.type === 'ELECTRICITY') body.meterNumber = draft.meterNumber;
+      if (draft.meterNumber && draft.type === 'CABLE_TV') body.smartcardNumber = draft.meterNumber;
+      if (draft.meterType) body.meterType = draft.meterType;
+      if (draft.type === 'CABLE_TV' && draft.billerName) body.provider = draft.billerName;
+      if (draft.type === 'ELECTRICITY' && draft.network) body.provider = draft.network;
+
+      const { data: result, error } = await supabase.functions.invoke<{
+        reference?: string;
+        status?: string;
+        token?: string;
+        message?: string;
+      }>(functionName, { body });
+      if (error) throw error;
+      if (!result) throw new Error('We could not confirm your purchase. Please check your transaction history.');
+
+      const txStatusMap: Record<string, 'SUCCESSFUL' | 'PENDING' | 'FAILED'> = {
+        success: 'SUCCESSFUL',
+        pending: 'PENDING',
+        failed: 'FAILED',
+      };
+
+      const newTx: TransactionRecord = {
+        id: result.reference || `tx-${Date.now()}`,
+        reference: result.reference || `ABK-${Date.now()}`,
+        type: draft.type,
+        title: draft.title,
+        description: `${draft.serviceName} to ${draft.recipient}`,
+        amount: draft.amount,
+        fee: draft.fee,
+        status: txStatusMap[result.status || 'success'] || 'SUCCESSFUL',
+        date: 'Just now',
+        timestamp: Date.now(),
+        network: draft.network,
+        recipient: draft.recipient,
+        billerName: draft.billerName,
+        token: result.token,
+        units: draft.units,
+      };
+
+      setActiveReceipt(newTx);
+      setIsPinModalOpen(false);
+      setIsReceiptOpen(true);
+      setPaymentSuccessCount((prev) => prev + 1);
+
+      // Refresh wallet balance & transactions in the background
+      refreshData().catch(() => {});
+
+      if (draft.onSuccess) {
+        try { draft.onSuccess(); } catch {}
       }
+      return true;
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Purchase failed. Please try again.';
+      setPurchaseError(msg);
+      return false;
     }
-    setPaymentSuccessCount((prev) => prev + 1);
+  }, [draft, refreshData]);
 
-    setActiveReceipt(newTx);
-    setIsPinModalOpen(false);
-    setIsReceiptOpen(true);
-    return true;
-  };
+  const verifyBiometricAndExecute = useCallback(async (): Promise<boolean> => {
+    try {
+      await authenticateBiometric('Authorize this transaction');
+      const pin = await getBiometricTransactionPin();
+      if (!pin) {
+        setPurchaseError('Set up your transaction PIN before using biometric authorization.');
+        return false;
+      }
+      return await verifyPinAndExecute(pin);
+    } catch (error) {
+      setPurchaseError(error instanceof Error ? error.message : 'Biometric authorization was not completed.');
+      return false;
+    }
+  }, [verifyPinAndExecute]);
 
   const closeReceipt = () => {
     setIsReceiptOpen(false);
     setDraft(null);
+    setPurchaseError(null);
   };
 
   const quickRepeatLast = () => {
@@ -138,11 +206,13 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         paymentSuccessCount,
         draft,
         activeReceipt,
+        purchaseError,
         startCheckout,
         closeSheet,
         proceedToPin,
         cancelPin,
         verifyPinAndExecute,
+        verifyBiometricAndExecute,
         closeReceipt,
         quickRepeatLast,
       }}
@@ -154,8 +224,6 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
 export function useCheckout() {
   const context = useContext(CheckoutContext);
-  if (!context) {
-    throw new Error('useCheckout must be used within a CheckoutProvider');
-  }
+  if (!context) throw new Error('useCheckout must be used within a CheckoutProvider');
   return context;
 }

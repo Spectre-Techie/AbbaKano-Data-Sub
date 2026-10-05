@@ -27,7 +27,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   const T = useTheme();
   const [showThemeModal, setShowThemeModal] = useState(false);
 
-  const initials = user.name
+  const initials = (user.name || user.fullName || user.phone || 'User')
     .split(' ')
     .map((n) => n[0])
     .join('')
@@ -110,7 +110,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               { backgroundColor: T.surfaceHigh, borderColor: T.border },
               pressed && styles.pressed,
             ]}
-            onPress={() => Linking.openURL('https://wa.me/2348034992810')}
+            onPress={() => Linking.openURL('https://wa.me/2348166774566')}
             hitSlop={8}
             accessible
             accessibilityLabel="Contact Support Desk"

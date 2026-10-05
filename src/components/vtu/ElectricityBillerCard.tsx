@@ -2,20 +2,33 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { PaletteType, Rounded, Spacing } from '@/constants/theme';
-import { MOCK_ELECTRICITY_DISCOS, UtilityBiller } from '@/constants/mockData';
 import { FormInput } from '@/components/common/FormInput';
 import { Button } from '@/components/common/Button';
 import { useCheckout } from '@/context/CheckoutContext';
 import { useApp } from '@/context/AppContext';
+import { api, ApiError } from '@/lib/api';
+
+const ELECTRICITY_DISCOS = [
+  { id: 'aedc', code: 'AEDC', name: 'Abuja Electricity' },
+  { id: 'ekedc', code: 'EKEDC', name: 'Eko Electricity' },
+  { id: 'ikedc', code: 'IKEDC', name: 'Ikeja Electric' },
+  { id: 'jed', code: 'JED', name: 'Jos Electricity' },
+  { id: 'kedco', code: 'KEDCO', name: 'Kano Electricity' },
+  { id: 'phed', code: 'PHED', name: 'Port Harcourt Electric' },
+] as const;
+type ElectricityDisco = (typeof ELECTRICITY_DISCOS)[number];
 
 export const ElectricityBillerCard: React.FC = () => {
   const { theme: Palette } = useApp();
   const styles = useMemo(() => getStyles(Palette), [Palette]);
-  const [selectedDisCo, setSelectedDisCo] = useState<UtilityBiller>(MOCK_ELECTRICITY_DISCOS[0]);
+  const [selectedDisCo, setSelectedDisCo] = useState<ElectricityDisco>(ELECTRICITY_DISCOS[0]);
   const [meterType, setMeterType] = useState<'PREPAID' | 'POSTPAID'>('PREPAID');
   const [meterNumber, setMeterNumber] = useState('');
   const [amount, setAmount] = useState('5000');
   const [verifiedCustomer, setVerifiedCustomer] = useState<string | null>(null);
+  const [planToken, setPlanToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const { startCheckout, paymentSuccessCount } = useCheckout();
 
@@ -33,14 +46,28 @@ export const ElectricityBillerCard: React.FC = () => {
     }
   }, [paymentSuccessCount]);
 
-  // Simulate instant customer meter verification when 11 digits are entered
   useEffect(() => {
-    if (meterNumber.length === 11) {
-      setVerifiedCustomer('ALHAJI SANI BELLO • KANO METROPOLITAN');
-    } else {
+    if (meterNumber.length < 8) {
       setVerifiedCustomer(null);
+      setPlanToken(null);
+      return;
     }
-  }, [meterNumber]);
+    let cancelled = false;
+    setLoading(true);
+    setErrorMessage(null);
+    const meterTypeQuery = meterType === 'POSTPAID' ? 'postpaid' : 'prepaid';
+    void Promise.all([
+      api.post<{ customerName?: string; customerAddress?: string }>('/vtu/verify-electricity', { provider: selectedDisCo.id, meterNumber }),
+      api.get<{ plans: Array<{ selectionToken?: string }> }>(`/vtu/service-plans?service=electricity&provider=${selectedDisCo.id}&meterType=${meterTypeQuery}`),
+    ]).then(([verification, plansResponse]) => {
+      if (cancelled) return;
+      setVerifiedCustomer(verification.customerName || verification.customerAddress || null);
+      setPlanToken(plansResponse.plans?.[0]?.selectionToken || null);
+    }).catch((error) => {
+      if (!cancelled) setErrorMessage(error instanceof ApiError ? error.message : 'Could not verify this meter.');
+    }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [meterNumber, meterType, selectedDisCo.id]);
 
   const presetAmounts = ['1000', '2000', '3000', '5000', '10000', '20000'];
 
@@ -57,6 +84,7 @@ export const ElectricityBillerCard: React.FC = () => {
       amount: numAmount,
       fee: 100,
       billerName: selectedDisCo.name,
+      planToken: planToken || undefined,
       units: `${(numAmount / 72.5).toFixed(1)} kWh`,
       onSuccess: clearInputs,
     });
@@ -71,7 +99,7 @@ export const ElectricityBillerCard: React.FC = () => {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.discoRow}
       >
-        {MOCK_ELECTRICITY_DISCOS.map((disco) => {
+        {ELECTRICITY_DISCOS.map((disco) => {
           const isSelected = disco.id === selectedDisCo.id;
           return (
             <Pressable
@@ -133,6 +161,7 @@ export const ElectricityBillerCard: React.FC = () => {
           </View>
         </View>
       )}
+      {errorMessage && <Text style={styles.verifiedName}>{errorMessage}</Text>}
 
       {/* Amount Preset Chips */}
       <Text style={styles.sectionTitle}>RECHARGE AMOUNT (₦)</Text>
@@ -160,9 +189,9 @@ export const ElectricityBillerCard: React.FC = () => {
       </ScrollView>
 
       <Button
-        title={`Purchase ₦${amount || '0'} Electricity Token`}
+        title={loading ? 'Verifying meter...' : `Purchase ₦${amount || '0'} Electricity Token`}
         onPress={handlePay}
-        disabled={meterNumber.length < 11 || !amount}
+        disabled={meterNumber.length < 8 || !amount || !planToken || loading}
         variant="primary"
         style={{ marginTop: Spacing.four }}
       />

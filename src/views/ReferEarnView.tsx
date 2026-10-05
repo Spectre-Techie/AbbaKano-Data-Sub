@@ -25,8 +25,8 @@ export const ReferEarnView: React.FC<ReferEarnViewProps> = ({ onBackPress }) => 
   const normalizedPhone = cleanPhone.startsWith('234') && cleanPhone.length > 10 ? '0' + cleanPhone.slice(3) : cleanPhone;
   const REFERRAL_CODE = user.referralCode || normalizedPhone || user.phone;
   const UNCLAIMED_BALANCE = referralCommissionBalance;
-  const TOTAL_BONUS = user.referralEarnings; // ₦3,600
-  const REFERRED_COUNT = user.referralCount; // 18
+  const TOTAL_BONUS = user.referralEarnings || 0;
+  const REFERRED_COUNT = user.referralCount || 0;
 
   const REFERRER_AVATARS = ['MA', 'FK', 'IB'];
 
@@ -44,7 +44,7 @@ export const ReferEarnView: React.FC<ReferEarnViewProps> = ({ onBackPress }) => 
     {
       step: '3',
       title: 'Unlock Referral Rewards',
-      body: 'You receive ₦200 instantly into your commission balance!',
+      body: 'You receive ₦100 instantly into your commission balance!',
     },
   ];
 
@@ -62,12 +62,12 @@ export const ReferEarnView: React.FC<ReferEarnViewProps> = ({ onBackPress }) => 
     }
   };
 
-  const handleTransferToWallet = () => {
+  const handleTransferToWallet = async () => {
     if (UNCLAIMED_BALANCE <= 0) {
       Alert.alert('No Balance', 'You have no unclaimed balance to transfer.');
       return;
     }
-    const success = withdrawCommission();
+    const success = await withdrawCommission();
     if (success) {
       Alert.alert('Transfer Successful', `₦${UNCLAIMED_BALANCE.toLocaleString()} has been added to your main wallet.`);
     }
@@ -94,7 +94,7 @@ export const ReferEarnView: React.FC<ReferEarnViewProps> = ({ onBackPress }) => 
           </View>
           <View style={styles.heroCardText}>
             <Text style={styles.heroCardTitle}>Unlimited Reseller Rewards</Text>
-            <Text style={styles.heroCardHighlight}>Earn ₦200 For Every Friend You Invite</Text>
+            <Text style={styles.heroCardHighlight}>Earn ₦100 For Every Friend You Invite</Text>
           </View>
         </View>
 

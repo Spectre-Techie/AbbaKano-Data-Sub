@@ -1,22 +1,31 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { PaletteType, Rounded, Spacing } from '@/constants/theme';
-import { MOCK_CABLE_PROVIDERS, UtilityBiller } from '@/constants/mockData';
 import { FormInput } from '@/components/common/FormInput';
 import { Button } from '@/components/common/Button';
 import { useCheckout } from '@/context/CheckoutContext';
 import { useApp } from '@/context/AppContext';
+import { api, ApiError } from '@/lib/api';
+
+const CABLE_PROVIDERS = [
+  { id: 'dstv', code: 'DSTV', name: 'DStv', brandColor: '#e60012' },
+  { id: 'gotv', code: 'GOTV', name: 'GOtv', brandColor: '#ff7900' },
+  { id: 'startimes', code: 'STARTIMES', name: 'StarTimes', brandColor: '#1d4ed8' },
+] as const;
+type CableProvider = (typeof CABLE_PROVIDERS)[number];
+type CablePackage = { id: string; name: string; price: number; planToken: string };
 
 export const CableTvBillerCard: React.FC = () => {
   const { theme: Palette } = useApp();
   const styles = useMemo(() => getStyles(Palette), [Palette]);
-  const [selectedProvider, setSelectedProvider] = useState<UtilityBiller>(MOCK_CABLE_PROVIDERS[0]);
+  const [selectedProvider, setSelectedProvider] = useState<CableProvider>(CABLE_PROVIDERS[0]);
   const [smartcardNumber, setSmartcardNumber] = useState('');
-  const [selectedPackageId, setSelectedPackageId] = useState<string>(
-    MOCK_CABLE_PROVIDERS[0].packages?.[0]?.id || ''
-  );
+  const [selectedPackageId, setSelectedPackageId] = useState<string>('');
+  const [packages, setPackages] = useState<CablePackage[]>([]);
   const [verifiedCustomer, setVerifiedCustomer] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const { startCheckout, paymentSuccessCount } = useCheckout();
 
@@ -34,14 +43,30 @@ export const CableTvBillerCard: React.FC = () => {
   }, [paymentSuccessCount]);
 
   useEffect(() => {
-    if (smartcardNumber.length === 10) {
-      setVerifiedCustomer('AISHA BELLO • SMARTCARD ACTIVE');
-    } else {
+    if (smartcardNumber.length !== 10) {
       setVerifiedCustomer(null);
+      setPackages([]);
+      setSelectedPackageId('');
+      return;
     }
-  }, [smartcardNumber]);
+    let cancelled = false;
+    setLoading(true);
+    setErrorMessage(null);
+    void api.post<{ customerName?: string; plans?: Array<{ name: string; price: number; code: string; selectionToken: string }> }>('/vtu/verify-cable', {
+      provider: selectedProvider.id,
+      smartcardNumber,
+    }).then((response) => {
+      if (cancelled) return;
+      setVerifiedCustomer(response.customerName || null);
+      const nextPackages = (response.plans || []).map((plan) => ({ id: plan.code, name: plan.name, price: Number(plan.price), planToken: plan.selectionToken }));
+      setPackages(nextPackages);
+      setSelectedPackageId(nextPackages[0]?.id || '');
+    }).catch((error) => {
+      if (!cancelled) setErrorMessage(error instanceof ApiError ? error.message : 'Could not verify this cable customer.');
+    }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [selectedProvider.id, smartcardNumber]);
 
-  const packages = selectedProvider.packages || [];
   const activePackage = packages.find((p) => p.id === selectedPackageId) || packages[0];
 
   const handleSubscribe = () => {
@@ -65,7 +90,7 @@ export const CableTvBillerCard: React.FC = () => {
       {/* Provider Selector Chips */}
       <Text style={styles.sectionTitle}>SELECT CABLE TV PROVIDER</Text>
       <View style={styles.providerRow}>
-        {MOCK_CABLE_PROVIDERS.map((prov) => {
+                {CABLE_PROVIDERS.map((prov) => {
           const isSelected = prov.id === selectedProvider.id;
           return (
             <Pressable
@@ -79,9 +104,9 @@ export const CableTvBillerCard: React.FC = () => {
               ]}
               onPress={() => {
                 setSelectedProvider(prov);
-                if (prov.packages && prov.packages.length > 0) {
-                  setSelectedPackageId(prov.packages[0].id);
-                }
+                setPackages([]);
+                setSelectedPackageId('');
+                setVerifiedCustomer(null);
               }}
             >
               <View
@@ -93,19 +118,11 @@ export const CableTvBillerCard: React.FC = () => {
                   },
                 ]}
               >
-                {prov.logo ? (
-                  <Image
-                    source={prov.logo}
-                    style={styles.provLogo}
-                    resizeMode="contain"
-                  />
-                ) : (
-                  <MaterialCommunityIcons
-                    name="television-classic"
-                    size={20}
-                    color={isSelected ? Palette.primary : Palette.onSurfaceMuted}
-                  />
-                )}
+                <MaterialCommunityIcons
+                  name="television-classic"
+                  size={20}
+                  color={isSelected ? Palette.primary : Palette.onSurfaceMuted}
+                />
               </View>
               <Text
                 style={[
@@ -146,6 +163,7 @@ export const CableTvBillerCard: React.FC = () => {
           </View>
         </View>
       )}
+      {errorMessage && <Text style={styles.verifiedName}>{errorMessage}</Text>}
 
       {/* Bouquets Package Selector */}
       <Text style={styles.sectionTitle}>SELECT PACKAGE / BOUQUET</Text>
@@ -171,7 +189,7 @@ export const CableTvBillerCard: React.FC = () => {
 
       <Button
         title={
-          activePackage
+          loading ? 'Verifying customer...' : activePackage
             ? `Pay ₦${activePackage.price.toLocaleString()} Subscription`
             : 'Select Bouquet'
         }

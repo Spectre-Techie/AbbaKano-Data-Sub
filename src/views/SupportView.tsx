@@ -75,7 +75,7 @@ export const SupportView: React.FC<SupportViewProps> = ({ onBackPress }) => {
 
   const handleJoinCommunity = () => {
     Linking.openURL(
-      "https://chat.whatsapp.com/CqV5N2OeqEx2fBBfExeAgN?s=sw&p=a&mlu=4&ilr=4",
+      "https://chat.whatsapp.com/DEpJ8XD2yWy1lKyLEHj4Di",
     ).catch(() => {
       Alert.alert(
         "Error",
@@ -195,7 +195,7 @@ export const SupportView: React.FC<SupportViewProps> = ({ onBackPress }) => {
               </View>
             </View>
             <Text style={styles.channelSubtitle}>
-              +2348166774566 • 1-Tap Agent Chat
+              +234 816 677 4566 • 1-Tap Agent Chat
             </Text>
           </View>
           <MaterialIcons
