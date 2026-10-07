@@ -5,6 +5,7 @@ import {
   TransactionRecord,
   KycTierInfo,
   MOCK_KYC_TIERS,
+  MOCK_VIRTUAL_ACCOUNTS,
 } from '@/constants/mockData';
 import { getPalette, setActiveThemeMode, PaletteType } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
@@ -83,7 +84,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [referralCommissionBalance, setReferralCommissionBalance] = useState<number>(0);
   const [isBalanceMasked, setIsBalanceMasked] = useState<boolean>(false);
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
-  const [virtualAccounts, setVirtualAccounts] = useState<VirtualAccount[]>([]);
+  const [virtualAccounts, setVirtualAccounts] = useState<VirtualAccount[]>(MOCK_VIRTUAL_ACCOUNTS);
   const [kycTiers, setKycTiers] = useState<KycTierInfo[]>(MOCK_KYC_TIERS);
   const [unreadNotifications, setUnreadNotifications] = useState<number>(0);
 

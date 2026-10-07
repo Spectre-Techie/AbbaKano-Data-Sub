@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, StyleSheet, ActivityIndicator, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp, useTheme } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
@@ -20,13 +20,14 @@ import { AuthWelcomeView } from '@/views/AuthWelcomeView';
 import { AuthLoginView } from '@/views/AuthLoginView';
 import { AuthRegisterView } from '@/views/AuthRegisterView';
 import { AuthPinSetupView } from '@/views/AuthPinSetupView';
+import { AppLockView } from '@/views/AppLockView';
 import { ForgotPasswordView } from '@/views/ForgotPasswordView';
 
 // Global Transaction Overlays
 import { CheckoutSheet } from '@/components/modals/CheckoutSheet';
 import { PinAuthModal } from '@/components/modals/PinAuthModal';
-import { saveBiometricTransactionPin } from '@/services/biometricService';
-import { supabase } from '@/lib/supabase';
+import { saveBiometricTransactionPin, isAppLockEnabled } from '@/services/biometricService';
+import { supabase, extractFunctionError } from '@/lib/supabase';
 import { ReceiptModal } from '@/components/modals/ReceiptModal';
 
 type AuthState = 'authenticated' | 'welcome' | 'login' | 'register' | 'pin_setup' | 'forgot_password';
@@ -36,6 +37,7 @@ export default function App() {
   const { user, isLoading: authLoading, isPasswordRecovery, logout } = useAuth();
   // Derive initial auth screen from token hydration
   const [authState, setAuthState] = useState<AuthState>('welcome');
+  const [isAppLocked, setIsAppLocked] = useState(true);
   const [changingPin, setChangingPin] = useState(false);
   const [activeTab, setActiveTab] = useState<AppTabKey>('home');
   const [activeDedicatedService, setActiveDedicatedService] = useState<DedicatedService>(null);
@@ -53,6 +55,49 @@ export default function App() {
       setAuthState(isPasswordRecovery ? 'forgot_password' : user ? 'authenticated' : 'welcome');
     }
   }, [authLoading, user, isPasswordRecovery]);
+
+  // Check if app lock is enabled for the logged-in session
+  useEffect(() => {
+    let mounted = true;
+    void (async () => {
+      if (user) {
+        const enabled = await isAppLockEnabled();
+        if (mounted) setIsAppLocked(enabled);
+      } else {
+        if (mounted) setIsAppLocked(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [user]);
+
+  // Lock app only after at least 3 minutes of background inactivity
+  const backgroundTimeRef = useRef<number | null>(null);
+  const APP_LOCK_INACTIVITY_MS = 3 * 60 * 1000; // 3 minutes
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        if (!backgroundTimeRef.current) {
+          backgroundTimeRef.current = Date.now();
+        }
+      } else if (nextAppState === 'active') {
+        const bgTime = backgroundTimeRef.current;
+        backgroundTimeRef.current = null;
+
+        if (bgTime && user) {
+          const elapsed = Date.now() - bgTime;
+          if (elapsed >= APP_LOCK_INACTIVITY_MS) {
+            void isAppLockEnabled().then((enabled) => {
+              if (enabled) {
+                setIsAppLocked(true);
+              }
+            });
+          }
+        }
+      }
+    });
+    return () => subscription.remove();
+  }, [user]);
 
   const handleSelectService = (serviceKey: string) => {
     setShowFundWallet(false);
@@ -113,6 +158,7 @@ export default function App() {
             setShowReferEarn(false);
             setShowSupport(false);
             setActiveDedicatedService(null);
+            setIsAppLocked(false);
             setAuthState('authenticated');
           }}
           onRegisterPress={() => setAuthState('register')}
@@ -139,15 +185,19 @@ export default function App() {
         <AuthPinSetupView
           requireCurrentPin={changingPin}
           onPinCompleted={async (pin, currentPin) => {
-            if (changingPin) {
-              const { error } = await supabase.functions.invoke('update-transaction-pin', {
-                body: { newPin: pin, currentPin },
-              });
-              if (error) throw error;
+            const body: Record<string, unknown> = { newPin: pin };
+            if (changingPin && currentPin) {
+              body.currentPin = currentPin;
+            }
+            const { error } = await supabase.functions.invoke('update-transaction-pin', { body });
+            if (error) {
+              const errorMsg = await extractFunctionError(error, 'Could not save your transaction PIN.');
+              throw new Error(errorMsg);
             }
             await saveBiometricTransactionPin(pin);
             setChangingPin(false);
             setActiveTab('home');
+            setIsAppLocked(false);
             setAuthState('authenticated');
           }}
         />
@@ -159,6 +209,27 @@ export default function App() {
     return (
       <SafeAreaView key={effectiveTheme} style={[styles.fill, bg]}>
         <ForgotPasswordView onBackToLogin={() => setAuthState('login')} />
+      </SafeAreaView>
+    );
+  }
+
+  // ── App Lock challenge screen when authenticated session is locked ──
+  if (authState === 'authenticated' && isAppLocked) {
+    return (
+      <SafeAreaView key={effectiveTheme} style={[styles.fill, bg]}>
+        <AppLockView
+          onUnlock={() => setIsAppLocked(false)}
+          onSignOut={async () => {
+            await logout();
+            setIsAppLocked(false);
+            setActiveTab('home');
+            setShowFundWallet(false);
+            setShowReferEarn(false);
+            setShowSupport(false);
+            setActiveDedicatedService(null);
+            setAuthState('welcome');
+          }}
+        />
       </SafeAreaView>
     );
   }
@@ -200,12 +271,13 @@ export default function App() {
                 onNavigateToReferEarn={() => setShowReferEarn(true)}
                 onNavigateToFundWallet={() => setShowFundWallet(true)}
                 onNavigateToSupport={() => setShowSupport(true)}
-                onNavigateToPinSetup={() => {
-                  setChangingPin(true);
+                onNavigateToPinSetup={(hasExistingPin) => {
+                  setChangingPin(Boolean(hasExistingPin));
                   setAuthState('pin_setup');
                 }}
                 onSignOut={async () => {
                   await logout();
+                  setIsAppLocked(false);
                   setActiveTab('home');
                   setShowFundWallet(false);
                   setShowReferEarn(false);

@@ -61,11 +61,11 @@ export const AuthLoginView: React.FC<AuthLoginViewProps> = ({
 
   const handleWhatsAppSupport = () => {
     Linking.openURL(
-      'https://wa.me/2348166774566?text=Hello%20AbbaKano%20Support%2C%20I%20need%20assistance%20logging%20into%20my%20account.'
+      'https://wa.me/2348133339850?text=Hello%20AbbaKano%20Support%2C%20I%20need%20assistance%20logging%20into%20my%20account.'
     ).catch(() => {
       Alert.alert(
         'Error',
-        'Unable to open WhatsApp. Please contact +2348166774566 directly.'
+        'Unable to open WhatsApp. Please contact +2348133339850 directly.'
       );
     });
   };

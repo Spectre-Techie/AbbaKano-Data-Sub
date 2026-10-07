@@ -153,8 +153,18 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         try { draft.onSuccess(); } catch {}
       }
       return true;
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Purchase failed. Please try again.';
+    } catch (err: any) {
+      let msg = 'Purchase failed. Please try again.';
+      if (err instanceof ApiError) {
+        msg = err.message;
+      } else if (err?.context instanceof Response) {
+        try {
+          const body = await err.context.clone().json();
+          if (body?.message) msg = body.message;
+        } catch {}
+      } else if (err?.message) {
+        msg = err.message;
+      }
       setPurchaseError(msg);
       return false;
     }

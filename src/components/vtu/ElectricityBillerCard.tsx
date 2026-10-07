@@ -132,6 +132,9 @@ export const ElectricityBillerCard: React.FC = () => {
             >
               <Text
                 style={[styles.meterTypeText, isSelected && styles.meterTypeTextActive]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.75}
               >
                 {type === 'PREPAID' ? 'Prepaid (Token Code)' : 'Postpaid (Bill Payment)'}
               </Text>
@@ -252,6 +255,7 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
   meterTypeBtn: {
     flex: 1,
     paddingVertical: 9,
+    paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: Rounded.md,
