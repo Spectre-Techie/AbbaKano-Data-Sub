@@ -1,0 +1,15 @@
+# EAS Build ignore - keep upload archive small and avoid timeout
+.git/
+.expo/
+.agent/
+.claude/
+.vscode/
+dist/
+web-build/
+stitch_abbakano_data_sub/
+android/
+ios/
+*.log
+.env
+.env*.local
+pnpm-lock.yaml
