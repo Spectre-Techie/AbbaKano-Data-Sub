@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "abbakano_data_sub_app",
+    "name": "AbbaKano",
     "slug": "abbakano_data_sub_app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,6 +11,15 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.abbakano.datasub",
+      "versionCode": 1,
+      "softwareKeyboardLayoutMode": "resize",
+      "permissions": [
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

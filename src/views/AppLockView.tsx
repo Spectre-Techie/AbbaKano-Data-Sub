@@ -37,7 +37,7 @@ export const AppLockView: React.FC<AppLockViewProps> = ({ onUnlock, onSignOut })
   const [hasBiometrics, setHasBiometrics] = useState(false);
 
   // Shake animation for incorrect PIN
-  const shakeAnim = React.useRef(new Animated.Value(0)).current;
+  const [shakeAnim] = useState(() => new Animated.Value(0));
 
   const triggerShake = useCallback(() => {
     if (Platform.OS !== 'web') {
@@ -286,7 +286,7 @@ export const AppLockView: React.FC<AppLockViewProps> = ({ onUnlock, onSignOut })
 
               <Text style={styles.bioCardTitle}>Biometric Unlock</Text>
               <Text style={styles.bioCardSubtitle}>
-                Tap the fingerprint above or touch your device's biometric sensor
+                Tap the fingerprint above or touch your device&apos;s biometric sensor
               </Text>
 
               <Pressable

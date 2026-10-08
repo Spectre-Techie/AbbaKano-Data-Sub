@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, ActivityIndicator, AppState } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  ActivityIndicator,
+  AppState,
+  BackHandler,
+  ToastAndroid,
+  Platform,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp, useTheme } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
@@ -98,6 +106,69 @@ export default function App() {
     });
     return () => subscription.remove();
   }, [user]);
+
+  // Hardware Android Back button handler to provide native navigation and prevent abrupt app exits
+  const lastBackPressRef = useRef<number>(0);
+  useEffect(() => {
+    const onHardwareBack = () => {
+      // 1. If inside non-welcome auth sub-screens, return to welcome
+      if (authState === 'login' || authState === 'register' || authState === 'forgot_password') {
+        setAuthState('welcome');
+        return true;
+      }
+
+      // If app is locked or in welcome/loading, allow default back behavior
+      if (authState !== 'authenticated' || isAppLocked) {
+        return false;
+      }
+
+      // 2. Overlay sub-screens: close overlay first
+      if (showFundWallet) {
+        setShowFundWallet(false);
+        return true;
+      }
+      if (showReferEarn) {
+        setShowReferEarn(false);
+        return true;
+      }
+      if (showSupport) {
+        setShowSupport(false);
+        return true;
+      }
+      if (activeDedicatedService !== null) {
+        setActiveDedicatedService(null);
+        return true;
+      }
+
+      // 3. Bottom tabs: switch back to Home tab before exiting
+      if (activeTab !== 'home') {
+        setActiveTab('home');
+        return true;
+      }
+
+      // 4. On Home dashboard: double-press back within 2 seconds to exit app
+      const now = Date.now();
+      if (now - lastBackPressRef.current < 2000) {
+        return false; // Exit app
+      }
+      lastBackPressRef.current = now;
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Press back again to exit', ToastAndroid.SHORT);
+      }
+      return true;
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', onHardwareBack);
+    return () => backHandler.remove();
+  }, [
+    authState,
+    isAppLocked,
+    showFundWallet,
+    showReferEarn,
+    showSupport,
+    activeDedicatedService,
+    activeTab,
+  ]);
 
   const handleSelectService = (serviceKey: string) => {
     setShowFundWallet(false);

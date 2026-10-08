@@ -228,7 +228,7 @@ export const AuthLoginView: React.FC<AuthLoginViewProps> = ({
 
         {/* === FOOTER LINKS === */}
         <View style={styles.footerLinks}>
-          <Text style={styles.footerText}>Don't have an account?{' '}</Text>
+          <Text style={styles.footerText}>Don&apos;t have an account?{' '}</Text>
           <Pressable onPress={onRegisterPress} hitSlop={8}>
             <Text style={styles.footerLink}>Register Now</Text>
           </Pressable>

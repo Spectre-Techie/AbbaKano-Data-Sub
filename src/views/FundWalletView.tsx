@@ -87,6 +87,7 @@ export const FundWalletView: React.FC<FundWalletViewProps> = ({
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* === DEDICATED TRANSFER ACCOUNTS (MONNIFY 3-BANK ENGINE) === */}
         <View style={styles.accountsSectionHeader}>
