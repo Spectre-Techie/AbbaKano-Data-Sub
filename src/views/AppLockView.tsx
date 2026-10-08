@@ -30,6 +30,7 @@ export const AppLockView: React.FC<AppLockViewProps> = ({ onUnlock, onSignOut })
   const { user } = useAuth();
   const styles = useMemo(() => getStyles(Palette, isDark), [Palette, isDark]);
 
+  const [authMethod, setAuthMethod] = useState<'pin' | 'biometric'>('pin');
   const [enteredPin, setEnteredPin] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -63,33 +64,19 @@ export const AppLockView: React.FC<AppLockViewProps> = ({ onUnlock, onSignOut })
     return () => { mounted = false; };
   }, []);
 
-  // Handle Biometric Unlock
+  // Handle Biometric Unlock (only invoked when chosen by the user)
   const handleBiometricUnlock = useCallback(async () => {
     setErrorMsg(null);
     try {
       await authenticateBiometric('Unlock AbbaKano');
       onUnlock();
-    } catch {
-      // User cancelled or biometric failed; keep keypad open
+    } catch (err: any) {
+      // User cancelled or biometric failed; display informative message
+      if (err?.message && !err.message.includes('Cancel')) {
+        setErrorMsg(err.message);
+      }
     }
   }, [onUnlock]);
-
-  // Auto-prompt biometric upon mount if supported
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    void (async () => {
-      const available = await isBiometricAvailable();
-      const enabled = await isBiometricsEnabled();
-      if (available && enabled) {
-        timer = setTimeout(() => {
-          void handleBiometricUnlock();
-        }, 350);
-      }
-    })();
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [handleBiometricUnlock]);
 
   // Handle Keypad Press
   const handleKeyPress = async (val: string) => {
@@ -152,62 +139,190 @@ export const AppLockView: React.FC<AppLockViewProps> = ({ onUnlock, onSignOut })
             {displayName}
           </Text>
           <Text style={styles.instructionText}>
-            Enter your 4-digit PIN or use fingerprint to unlock
+            {authMethod === 'pin'
+              ? 'Enter your 4-digit PIN to unlock'
+              : 'Touch fingerprint sensor or tap below to unlock'}
           </Text>
+
+          {/* Mode Selector Choice: Type PIN vs Fingerprint */}
+          {hasBiometrics && (
+            <View style={styles.methodSelector}>
+              <Pressable
+                style={[
+                  styles.methodTab,
+                  authMethod === 'pin' && styles.methodTabActive,
+                ]}
+                onPress={() => {
+                  setAuthMethod('pin');
+                  setErrorMsg(null);
+                }}
+              >
+                <MaterialIcons
+                  name="dialpad"
+                  size={16}
+                  color={authMethod === 'pin' ? Palette.primary : Palette.onSurfaceMuted}
+                />
+                <Text
+                  style={[
+                    styles.methodTabText,
+                    authMethod === 'pin' && styles.methodTabTextActive,
+                  ]}
+                >
+                  Type PIN
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[
+                  styles.methodTab,
+                  authMethod === 'biometric' && styles.methodTabActive,
+                ]}
+                onPress={() => {
+                  setAuthMethod('biometric');
+                  setErrorMsg(null);
+                }}
+              >
+                <MaterialCommunityIcons
+                  name="fingerprint"
+                  size={18}
+                  color={authMethod === 'biometric' ? Palette.primary : Palette.onSurfaceMuted}
+                />
+                <Text
+                  style={[
+                    styles.methodTabText,
+                    authMethod === 'biometric' && styles.methodTabTextActive,
+                  ]}
+                >
+                  Fingerprint
+                </Text>
+              </Pressable>
+            </View>
+          )}
         </View>
 
-        {/* PIN Dots Display with Shake Animation */}
-        <Animated.View
-          style={[
-            styles.pinDotsRow,
-            { transform: [{ translateX: shakeAnim }] },
-          ]}
-        >
-          {Array.from({ length: 4 }).map((_, i) => {
-            const isFilled = i < enteredPin.length;
-            return (
-              <View
-                key={i}
-                style={[
-                  styles.pinDot,
-                  isFilled ? styles.pinDotFilled : styles.pinDotEmpty,
-                  errorMsg ? styles.pinDotError : null,
-                ]}
-              />
-            );
-          })}
-        </Animated.View>
+        {/* --- TYPE PIN MODE --- */}
+        {authMethod === 'pin' && (
+          <View style={styles.centerSection}>
+            {/* PIN Dots Display with Shake Animation */}
+            <Animated.View
+              style={[
+                styles.pinDotsRow,
+                { transform: [{ translateX: shakeAnim }] },
+              ]}
+            >
+              {Array.from({ length: 4 }).map((_, i) => {
+                const isFilled = i < enteredPin.length;
+                return (
+                  <View
+                    key={i}
+                    style={[
+                      styles.pinDot,
+                      isFilled ? styles.pinDotFilled : styles.pinDotEmpty,
+                      errorMsg ? styles.pinDotError : null,
+                    ]}
+                  />
+                );
+              })}
+            </Animated.View>
 
-        {/* Error Feedback */}
-        {errorMsg ? (
-          <View style={styles.errorBox}>
-            <Ionicons name="alert-circle-outline" size={15} color={Palette.error} />
-            <Text style={styles.errorText} numberOfLines={2}>{errorMsg}</Text>
+            {/* Error Feedback */}
+            {errorMsg ? (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle-outline" size={15} color={Palette.error} />
+                <Text style={styles.errorText} numberOfLines={2}>{errorMsg}</Text>
+              </View>
+            ) : (
+              <View style={styles.errorSpacer} />
+            )}
+
+            {/* Tactile Keypad */}
+            <View style={styles.numpadWrapper}>
+              <Numpad
+                enteredPin={enteredPin}
+                onKeyPress={handleKeyPress}
+                onBackspace={handleBackspace}
+                onBiometricPress={
+                  hasBiometrics
+                    ? () => {
+                        setAuthMethod('biometric');
+                        void handleBiometricUnlock();
+                      }
+                    : undefined
+                }
+                showPinDots={false}
+              />
+            </View>
           </View>
-        ) : (
-          <View style={styles.errorSpacer} />
         )}
 
-        {/* Tactile Keypad */}
-        <View style={styles.numpadWrapper}>
-          <Numpad
-            enteredPin={enteredPin}
-            onKeyPress={handleKeyPress}
-            onBackspace={handleBackspace}
-            onBiometricPress={handleBiometricUnlock}
-            showPinDots={false}
-          />
-        </View>
+        {/* --- FINGERPRINT / BIOMETRIC MODE --- */}
+        {authMethod === 'biometric' && (
+          <View style={styles.centerSection}>
+            {errorMsg && (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle-outline" size={15} color={Palette.error} />
+                <Text style={styles.errorText} numberOfLines={2}>{errorMsg}</Text>
+              </View>
+            )}
+
+            <View style={styles.biometricCard}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.bioTouchArea,
+                  pressed && styles.bioTouchAreaPressed,
+                ]}
+                onPress={handleBiometricUnlock}
+              >
+                <View style={styles.bioOuterRing}>
+                  <View style={styles.bioIconCircle}>
+                    <MaterialCommunityIcons
+                      name="fingerprint"
+                      size={64}
+                      color={Palette.primary}
+                    />
+                  </View>
+                </View>
+              </Pressable>
+
+              <Text style={styles.bioCardTitle}>Biometric Unlock</Text>
+              <Text style={styles.bioCardSubtitle}>
+                Tap the fingerprint above or touch your device's biometric sensor
+              </Text>
+
+              <Pressable
+                style={({ pressed }) => [styles.bioScanNowBtn, pressed && styles.btnPressed]}
+                onPress={handleBiometricUnlock}
+              >
+                <MaterialCommunityIcons name="fingerprint" size={20} color="#FFFFFF" />
+                <Text style={styles.bioScanNowBtnText}>Scan Fingerprint Now</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [styles.switchMethodBtn, pressed && styles.btnPressed]}
+                onPress={() => {
+                  setAuthMethod('pin');
+                  setErrorMsg(null);
+                }}
+              >
+                <MaterialIcons name="dialpad" size={16} color={Palette.primary} />
+                <Text style={styles.switchMethodText}>Type 4-Digit PIN Instead</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
 
         {/* Footer Actions: Switch Account / Sign In with Password */}
         <View style={styles.footer}>
-          {hasBiometrics && (
+          {hasBiometrics && authMethod === 'pin' && (
             <Pressable
               style={({ pressed }) => [styles.bioPromptBtn, pressed && styles.btnPressed]}
-              onPress={handleBiometricUnlock}
+              onPress={() => {
+                setAuthMethod('biometric');
+                void handleBiometricUnlock();
+              }}
             >
               <MaterialCommunityIcons name="fingerprint" size={20} color={Palette.primary} />
-              <Text style={styles.bioPromptText}>Use Biometrics</Text>
+              <Text style={styles.bioPromptText}>Or unlock with Fingerprint</Text>
             </Pressable>
           )}
 
@@ -292,6 +407,47 @@ const getStyles = (Palette: PaletteType, isDark: boolean) =>
       fontFamily: Typography.family,
       maxWidth: 280,
     },
+    methodSelector: {
+      flexDirection: 'row',
+      backgroundColor: Palette.surfaceHigh,
+      borderRadius: Rounded.full,
+      padding: 4,
+      gap: 4,
+      marginTop: Spacing.three,
+      borderWidth: 1,
+      borderColor: Palette.borderHigh,
+    },
+    methodTab: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 16,
+      paddingVertical: 7,
+      borderRadius: Rounded.full,
+    },
+    methodTabActive: {
+      backgroundColor: Palette.surface,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.35 : 0.08,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    methodTabText: {
+      fontSize: 12.5,
+      fontWeight: '600',
+      color: Palette.onSurfaceMuted,
+      fontFamily: Typography.family,
+    },
+    methodTabTextActive: {
+      color: Palette.onSurface,
+      fontWeight: '800',
+    },
+    centerSection: {
+      width: '100%',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     pinDotsRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -333,6 +489,7 @@ const getStyles = (Palette: PaletteType, isDark: boolean) =>
       borderRadius: Rounded.md,
       minHeight: 28,
       maxWidth: 320,
+      marginVertical: 4,
     },
     errorText: {
       fontSize: 12,
@@ -348,6 +505,103 @@ const getStyles = (Palette: PaletteType, isDark: boolean) =>
       width: '100%',
       maxWidth: 340,
     },
+
+    // Biometric Unlock Card Styles
+    biometricCard: {
+      alignItems: 'center',
+      paddingVertical: Spacing.four,
+      paddingHorizontal: Spacing.four,
+      width: '100%',
+      maxWidth: 320,
+      gap: Spacing.three,
+    },
+    bioTouchArea: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginVertical: Spacing.two,
+    },
+    bioTouchAreaPressed: {
+      transform: [{ scale: 0.95 }],
+      opacity: 0.85,
+    },
+    bioOuterRing: {
+      width: 120,
+      height: 120,
+      borderRadius: 60,
+      backgroundColor: isDark ? 'rgba(238, 152, 0, 0.12)' : 'rgba(238, 152, 0, 0.15)',
+      borderWidth: 2,
+      borderColor: isDark ? 'rgba(238, 152, 0, 0.35)' : 'rgba(238, 152, 0, 0.45)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    bioIconCircle: {
+      width: 92,
+      height: 92,
+      borderRadius: 46,
+      backgroundColor: Palette.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: Palette.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 6,
+    },
+    bioCardTitle: {
+      fontSize: 18,
+      fontWeight: '800',
+      color: Palette.onSurface,
+      fontFamily: Typography.family,
+      textAlign: 'center',
+    },
+    bioCardSubtitle: {
+      fontSize: 13,
+      color: Palette.onSurfaceVariant,
+      textAlign: 'center',
+      fontFamily: Typography.family,
+      maxWidth: 260,
+      lineHeight: 18,
+    },
+    bioScanNowBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: Palette.primary,
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+      borderRadius: Rounded.xl,
+      width: '100%',
+      shadowColor: Palette.primary,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.3,
+      shadowRadius: 6,
+      elevation: 4,
+      marginTop: Spacing.two,
+    },
+    bioScanNowBtnText: {
+      color: '#FFFFFF',
+      fontSize: 14,
+      fontWeight: '700',
+      fontFamily: Typography.family,
+    },
+    switchMethodBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: Rounded.full,
+      backgroundColor: Palette.surfaceHigh,
+    },
+    switchMethodText: {
+      fontSize: 12.5,
+      fontWeight: '700',
+      color: Palette.primary,
+      fontFamily: Typography.family,
+    },
+
     footer: {
       alignItems: 'center',
       gap: Spacing.two,
