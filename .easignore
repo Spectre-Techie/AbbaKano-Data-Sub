@@ -13,3 +13,5 @@ ios/
 .env
 .env*.local
 pnpm-lock.yaml
+*.py
+__pycache__/
