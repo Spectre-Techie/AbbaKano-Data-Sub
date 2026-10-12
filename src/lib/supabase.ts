@@ -3,11 +3,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = (process.env.EXPO_PUBLIC_SUPABASE_URL || '').replace(/^[=\s]+|[=\s]+$/g, '').trim();
-const supabasePublishableKey = (process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || '').replace(/^[=\s]+|[=\s]+$/g, '').trim();
+const DEFAULT_SUPABASE_URL = 'https://fwzxawgkgatchfzmullf.supabase.co';
+const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_VR_VimPG87dnGL8v98OkWA_9gQffeR1';
+
+const supabaseUrl =
+  (process.env.EXPO_PUBLIC_SUPABASE_URL || '').replace(/^[=\s]+|[=\s]+$/g, '').trim() ||
+  DEFAULT_SUPABASE_URL;
+const supabasePublishableKey =
+  (process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || '').replace(/^[=\s]+|[=\s]+$/g, '').trim() ||
+  DEFAULT_SUPABASE_PUBLISHABLE_KEY;
 
 if (!supabaseUrl || !supabasePublishableKey) {
-  throw new Error('Supabase mobile environment variables are missing.');
+  console.warn('Supabase mobile environment variables are missing.');
 }
 
 const storage = {
