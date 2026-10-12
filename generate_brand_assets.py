@@ -42,8 +42,10 @@ android_fg.paste(resized_logo, (paste_x, paste_y), resized_logo)
 android_bg = Image.new("RGBA", (1024, 1024), (1, 25, 125, 255)) # #01197D
 
 # 5. Splash icon (1024x1024 transparent centered crisp logo)
+# Android 12+ enforces a circular splash viewport (~600px diameter on 1024 canvas).
+# target_splash = 460 ensures top ("DATA SUB") and bottom ("ABBAKANO") sit safely inside the circle without any clipping.
 splash_img = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
-target_splash = 820
+target_splash = 460
 if w > h:
     sw = target_splash
     sh = int(h * (target_splash / w))
