@@ -3,7 +3,7 @@
     "name": "AbbaKano DataSub",
     "slug": "abbakano_data_sub_app",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "abbakanodatasubapp",
     "userInterfaceStyle": "automatic",
@@ -14,6 +14,7 @@
       "package": "com.abbakano.datasub",
       "versionCode": 1,
       "softwareKeyboardLayoutMode": "resize",
+      "resizeableActivity": true,
       "permissions": [
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
@@ -48,11 +49,11 @@
         "expo-build-properties",
         {
           "android": {
-            "enableMinifyInReleaseBuilds": false,
-            "enableShrinkResourcesInReleaseBuilds": false,
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
             "useLegacyPackaging": true,
             "buildArchs": ["arm64-v8a", "armeabi-v7a"],
-            "extraProguardRules": "-keep class com.swmansion.reanimated.** { *; }\n-keep class com.facebook.react.turbomodule.** { *; }"
+            "extraProguardRules": "-keep class com.swmansion.reanimated.** { *; }\n-keep class com.facebook.react.turbomodule.** { *; }\n-keepattributes *Annotation*\n-dontwarn okhttp3.**\n-dontwarn okio.**\n-dontwarn com.google.crypto.tink.**"
           }
         }
       ]

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback } from 'react';
 import { TransactionRecord, TransactionType } from '@/constants/mockData';
 import { TelcoNetworkId } from '@/constants/telco';
 import { ApiError, createIdempotencyKey } from '@/lib/api';
-import { supabase } from '@/lib/supabase';
+import { supabase, extractFunctionError } from '@/lib/supabase';
 import { useApp } from './AppContext';
 import { authenticateBiometric, getBiometricTransactionPin } from '@/services/biometricService';
 
@@ -23,6 +23,8 @@ export interface CheckoutDraft {
   meterNumber?: string;
   /** Electricity meter type (prepaid / postpaid) */
   meterType?: string;
+  /** Unique idempotency key pinned to this specific checkout instance */
+  idempotencyKey?: string;
   onSuccess?: () => void;
 }
 
@@ -30,6 +32,7 @@ interface CheckoutContextType {
   isSheetOpen: boolean;
   isPinModalOpen: boolean;
   isReceiptOpen: boolean;
+  isProcessing: boolean;
   paymentSuccessCount: number;
   draft: CheckoutDraft | null;
   activeReceipt: TransactionRecord | null;
@@ -38,8 +41,8 @@ interface CheckoutContextType {
   closeSheet: () => void;
   proceedToPin: () => void;
   cancelPin: () => void;
-  verifyPinAndExecute: (pin: string) => Promise<boolean>;
-  verifyBiometricAndExecute: () => Promise<boolean>;
+  verifyPinAndExecute: (pin: string) => Promise<{ success: boolean; error?: string }>;
+  verifyBiometricAndExecute: () => Promise<{ success: boolean; error?: string }>;
   closeReceipt: () => void;
   quickRepeatLast: () => void;
 }
@@ -47,34 +50,52 @@ interface CheckoutContextType {
 const CheckoutContext = createContext<CheckoutContextType | undefined>(undefined);
 
 export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { refreshData } = useApp();
+  const { refreshData, setMainBalance } = useApp();
   const [draft, setDraft] = useState<CheckoutDraft | null>(null);
   const [paymentSuccessCount, setPaymentSuccessCount] = useState(0);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const isExecutingRef = React.useRef(false);
   const [activeReceipt, setActiveReceipt] = useState<TransactionRecord | null>(null);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
 
   const startCheckout = (newDraft: CheckoutDraft) => {
-    setDraft(newDraft);
+    const withIdempotency: CheckoutDraft = {
+      ...newDraft,
+      idempotencyKey: newDraft.idempotencyKey || createIdempotencyKey(),
+    };
+    setDraft(withIdempotency);
     setPurchaseError(null);
+    setIsProcessing(false);
+    isExecutingRef.current = false;
     setIsSheetOpen(true);
     setIsPinModalOpen(false);
     setIsReceiptOpen(false);
   };
 
-  const closeSheet = () => setIsSheetOpen(false);
+  const closeSheet = () => {
+    if (isExecutingRef.current) return;
+    setIsSheetOpen(false);
+  };
 
   const proceedToPin = () => {
     setIsSheetOpen(false);
     setIsPinModalOpen(true);
   };
 
-  const cancelPin = () => setIsPinModalOpen(false);
+  const cancelPin = () => {
+    if (isExecutingRef.current) return; // Disallow cancelling while transaction in-flight
+    setIsPinModalOpen(false);
+  };
 
-  const verifyPinAndExecute = useCallback(async (pin: string): Promise<boolean> => {
-    if (!draft || pin.length !== 4) return false;
+  const verifyPinAndExecute = useCallback(async (pin: string): Promise<{ success: boolean; error?: string }> => {
+    if (!draft || pin.length !== 4) return { success: false, error: 'Enter a valid 4-digit PIN.' };
+    if (isExecutingRef.current) return { success: false, error: 'Transaction is already being processed.' };
+
+    isExecutingRef.current = true;
+    setIsProcessing(true);
     setPurchaseError(null);
 
     try {
@@ -87,9 +108,11 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       };
 
       const functionName = typeToFunction[draft.type];
-      if (!functionName || draft.type === 'FUND_WALLET') return false;
+      if (!functionName || draft.type === 'FUND_WALLET') {
+        throw new Error('Unsupported transaction type.');
+      }
 
-      const idempotencyKey = createIdempotencyKey();
+      const idempotencyKey = draft.idempotencyKey || createIdempotencyKey();
 
       // Build the body based on transaction type
       const body: Record<string, unknown> = {
@@ -113,15 +136,27 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         status?: string;
         token?: string;
         message?: string;
+        balance_kobo?: number;
       }>(functionName, { body });
-      if (error) throw error;
-      if (!result) throw new Error('We could not confirm your purchase. Please check your transaction history.');
+
+      if (error) {
+        const readableMsg = await extractFunctionError(
+          error,
+          'Transaction could not be completed. Please check your PIN and wallet balance.',
+        );
+        throw new Error(readableMsg);
+      }
+      if (!result) {
+        throw new Error('We could not confirm your purchase. Please check your transaction history.');
+      }
 
       const txStatusMap: Record<string, 'SUCCESSFUL' | 'PENDING' | 'FAILED'> = {
         success: 'SUCCESSFUL',
         pending: 'PENDING',
         failed: 'FAILED',
       };
+
+      const isSuccess = (result.status || 'success').toLowerCase() === 'success';
 
       const newTx: TransactionRecord = {
         id: result.reference || `tx-${Date.now()}`,
@@ -146,42 +181,52 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setIsReceiptOpen(true);
       setPaymentSuccessCount((prev) => prev + 1);
 
+      // Instant UI balance update
+      if (typeof result.balance_kobo === 'number') {
+        setMainBalance(result.balance_kobo / 100);
+      } else if (isSuccess) {
+        setMainBalance((prev) => Math.max(0, prev - draft.amount));
+      }
+
       // Refresh wallet balance & transactions in the background
-      refreshData().catch(() => {});
+      void refreshData();
 
       if (draft.onSuccess) {
         try { draft.onSuccess(); } catch {}
       }
-      return true;
+      return { success: true };
     } catch (err: any) {
       let msg = 'Purchase failed. Please try again.';
       if (err instanceof ApiError) {
         msg = err.message;
-      } else if (err?.context instanceof Response) {
-        try {
-          const body = await err.context.clone().json();
-          if (body?.message) msg = body.message;
-        } catch {}
-      } else if (err?.message) {
+      } else if (typeof err?.message === 'string' && err.message) {
         msg = err.message;
+      } else {
+        msg = await extractFunctionError(err, 'Purchase failed. Please verify your PIN and balance.');
       }
       setPurchaseError(msg);
-      return false;
+      return { success: false, error: msg };
+    } finally {
+      isExecutingRef.current = false;
+      setIsProcessing(false);
     }
-  }, [draft, refreshData]);
+  }, [draft, refreshData, setMainBalance]);
 
-  const verifyBiometricAndExecute = useCallback(async (): Promise<boolean> => {
+  const verifyBiometricAndExecute = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    if (isExecutingRef.current) return { success: false, error: 'Transaction is already being processed.' };
     try {
       await authenticateBiometric('Authorize this transaction');
       const pin = await getBiometricTransactionPin();
       if (!pin) {
-        setPurchaseError('Set up your transaction PIN before using biometric authorization.');
-        return false;
+        const msg = 'Set up your transaction PIN before using biometric authorization.';
+        setPurchaseError(msg);
+        return { success: false, error: msg };
       }
       return await verifyPinAndExecute(pin);
     } catch (error) {
-      setPurchaseError(error instanceof Error ? error.message : 'Biometric authorization was not completed.');
-      return false;
+      const msg = error instanceof Error ? error.message : 'Biometric authorization was not completed.';
+      setPurchaseError(msg);
+      return { success: false, error: msg };
     }
   }, [verifyPinAndExecute]);
 
@@ -213,6 +258,7 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         isSheetOpen,
         isPinModalOpen,
         isReceiptOpen,
+        isProcessing,
         paymentSuccessCount,
         draft,
         activeReceipt,

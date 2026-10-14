@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { StatusBar } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { DarkTheme, DefaultTheme, ThemeProvider, Slot } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Font from 'expo-font';
@@ -23,16 +23,12 @@ const RETRY_DELAY_MS = 1200;
 
 /** Inner shell — can call useApp() because it's inside <AppProvider> */
 function ThemedNavigationShell() {
-  const { effectiveTheme, theme } = useApp();
+  const { effectiveTheme } = useApp();
   const isDark = effectiveTheme === 'dark';
 
   return (
     <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
-      <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={theme.canvas}
-        translucent={false}
-      />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <Slot />
     </ThemeProvider>
   );

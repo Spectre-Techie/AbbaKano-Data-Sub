@@ -11,6 +11,7 @@ interface NumpadProps {
   pinLength?: number;
   enteredPin?: string;
   showPinDots?: boolean;
+  disabled?: boolean;
 }
 
 export const Numpad: React.FC<NumpadProps> = ({
@@ -20,6 +21,7 @@ export const Numpad: React.FC<NumpadProps> = ({
   pinLength = 4,
   enteredPin = '',
   showPinDots = true,
+  disabled = false,
 }) => {
   const { theme: Palette } = useApp();
   const styles = useMemo(() => getStyles(Palette), [Palette]);
@@ -57,7 +59,8 @@ export const Numpad: React.FC<NumpadProps> = ({
                 return (
                   <Pressable
                     key={item}
-                    style={({ pressed }) => [styles.key, pressed && styles.keyPressed]}
+                    disabled={disabled}
+                    style={({ pressed }) => [styles.key, pressed && !disabled && styles.keyPressed, disabled && { opacity: 0.4 }]}
                     onPress={onBiometricPress}
                     hitSlop={6}
                     accessible={true}
@@ -76,7 +79,8 @@ export const Numpad: React.FC<NumpadProps> = ({
                 return (
                   <Pressable
                     key={item}
-                    style={({ pressed }) => [styles.key, pressed && styles.keyPressed]}
+                    disabled={disabled}
+                    style={({ pressed }) => [styles.key, pressed && !disabled && styles.keyPressed, disabled && { opacity: 0.4 }]}
                     onPress={onBackspace}
                     hitSlop={6}
                     accessible={true}
@@ -90,13 +94,14 @@ export const Numpad: React.FC<NumpadProps> = ({
               return (
                 <Pressable
                   key={item}
-                  style={({ pressed }) => [styles.key, pressed && styles.keyPressed]}
+                  disabled={disabled}
+                  style={({ pressed }) => [styles.key, pressed && !disabled && styles.keyPressed, disabled && { opacity: 0.4 }]}
                   onPress={() => onKeyPress(item)}
                   hitSlop={6}
                   accessible={true}
                   accessibilityLabel={`Key ${item}`}
                 >
-                  <Text style={styles.digitText}>{item}</Text>
+                  <Text style={[styles.digitText, disabled && { opacity: 0.5 }]}>{item}</Text>
                 </Pressable>
               );
             })}

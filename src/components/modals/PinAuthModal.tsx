@@ -5,7 +5,7 @@ import {
   StyleSheet,
   Modal,
   Pressable,
-  Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { PaletteType, Rounded, Spacing } from '@/constants/theme';
@@ -14,12 +14,22 @@ import { useApp } from '@/context/AppContext';
 import { Numpad } from '@/components/common/Numpad';
 
 export const PinAuthModal: React.FC = () => {
-  const { isPinModalOpen, cancelPin, verifyPinAndExecute, verifyBiometricAndExecute, draft, purchaseError } = useCheckout();
+  const {
+    isPinModalOpen,
+    cancelPin,
+    verifyPinAndExecute,
+    verifyBiometricAndExecute,
+    draft,
+    purchaseError,
+    isProcessing,
+  } = useCheckout();
   const { theme: Palette } = useApp();
   const styles = useMemo(() => getStyles(Palette), [Palette]);
   const [pin, setPin] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
+
+  const isBusy = isVerifying || isProcessing;
 
   useEffect(() => {
     if (isPinModalOpen) {
@@ -32,7 +42,7 @@ export const PinAuthModal: React.FC = () => {
   if (!draft) return null;
 
   const handleKeyPress = (val: string) => {
-    if (isVerifying || pin.length >= 4) return;
+    if (isBusy || pin.length >= 4) return;
     const nextPin = pin + val;
     setPin(nextPin);
     setErrorMsg(null);
@@ -42,9 +52,9 @@ export const PinAuthModal: React.FC = () => {
       setIsVerifying(true);
       setTimeout(async () => {
         try {
-          const success = await verifyPinAndExecute(nextPin);
-          if (!success) {
-            setErrorMsg(purchaseError || 'Invalid transaction PIN. Please try again.');
+          const res = await verifyPinAndExecute(nextPin);
+          if (!res.success) {
+            setErrorMsg(res.error || purchaseError || 'Invalid transaction PIN. Please try again.');
             setPin('');
           }
         } catch (err: any) {
@@ -53,20 +63,30 @@ export const PinAuthModal: React.FC = () => {
         } finally {
           setIsVerifying(false);
         }
-      }, 150);
+      }, 100);
     }
   };
 
   const handleBackspace = () => {
+    if (isBusy) return;
     setPin((prev) => prev.slice(0, -1));
     setErrorMsg(null);
   };
 
   const handleBiometric = async () => {
+    if (isBusy) return;
+    setIsVerifying(true);
     setErrorMsg(null);
-    const success = await verifyBiometricAndExecute();
-    if (success) cancelPin();
-    else setErrorMsg('Biometric authorization was not completed.');
+    try {
+      const res = await verifyBiometricAndExecute();
+      if (res.success) {
+        cancelPin();
+      } else {
+        setErrorMsg(res.error || 'Biometric authorization was not completed.');
+      }
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   return (
@@ -74,22 +94,39 @@ export const PinAuthModal: React.FC = () => {
       visible={isPinModalOpen}
       transparent
       animationType="fade"
-      onRequestClose={cancelPin}
+      onRequestClose={() => {
+        if (!isBusy) cancelPin();
+      }}
     >
       <View style={styles.backdrop}>
         <View style={styles.modalCard}>
           {/* Header */}
           <View style={styles.header}>
-            <View style={styles.shieldIconBox}>
-              <MaterialCommunityIcons name="shield-lock" size={24} color={Palette.primaryLight} />
+            <View style={[styles.shieldIconBox, isBusy && styles.shieldIconBoxBusy]}>
+              {isBusy ? (
+                <ActivityIndicator size="small" color={Palette.primary} />
+              ) : (
+                <MaterialCommunityIcons name="shield-lock" size={24} color={Palette.primaryLight} />
+              )}
             </View>
-            <Text style={styles.title}>Authorize Payment</Text>
+            <Text style={styles.title}>
+              {isBusy ? 'Processing Payment...' : 'Authorize Payment'}
+            </Text>
             <Text style={styles.subtitle}>
-              Enter your 4-digit transaction PIN to confirm ₦{draft.amount.toLocaleString()} for {draft.title}
+              {isBusy
+                ? 'Communicating with telecom network securely. Please do not close the app.'
+                : `Enter your 4-digit transaction PIN to confirm ₦${draft.amount.toLocaleString()} for ${draft.title}`}
             </Text>
           </View>
 
-          {errorMsg && (
+          {isBusy && (
+            <View style={styles.processingBanner}>
+              <ActivityIndicator size="small" color="#FFFFFF" />
+              <Text style={styles.processingText}>Securing & Processing Transaction...</Text>
+            </View>
+          )}
+
+          {errorMsg && !isBusy && (
             <View style={styles.errorBox}>
               <Ionicons name="alert-circle-outline" size={16} color={Palette.error} />
               <Text style={styles.errorText}>{errorMsg}</Text>
@@ -103,11 +140,21 @@ export const PinAuthModal: React.FC = () => {
             onBackspace={handleBackspace}
             onBiometricPress={handleBiometric}
             showPinDots={true}
+            disabled={isBusy}
           />
 
           {/* Cancel button */}
-          <Pressable style={styles.cancelBtn} onPress={cancelPin} hitSlop={8}>
-            <Text style={styles.cancelBtnText}>Cancel Transaction</Text>
+          <Pressable
+            style={[styles.cancelBtn, isBusy && { opacity: 0.3 }]}
+            onPress={() => {
+              if (!isBusy) cancelPin();
+            }}
+            disabled={isBusy}
+            hitSlop={8}
+          >
+            <Text style={styles.cancelBtnText}>
+              {isBusy ? 'Please wait...' : 'Cancel Transaction'}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -176,6 +223,25 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
     fontSize: 11,
     color: Palette.error,
     fontWeight: '600',
+  },
+  shieldIconBoxBusy: {
+    borderColor: Palette.primary,
+    backgroundColor: `${Palette.primary}18`,
+  },
+  processingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Palette.primary,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.two,
+    borderRadius: Rounded.lg,
+    marginVertical: Spacing.two,
+  },
+  processingText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   cancelBtn: {
     marginTop: Spacing.two,

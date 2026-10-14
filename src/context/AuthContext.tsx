@@ -52,10 +52,15 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 function mapUser(user: {
   id: string;
   email?: string | null;
+  phone?: string | null;
   user_metadata?: Record<string, unknown>;
 }): AuthUser {
   const metadata = user.user_metadata || {};
-  const phone = typeof metadata.phone === 'string' ? metadata.phone : '';
+  const rawPhone = (typeof metadata.phone === 'string' && metadata.phone)
+    ? metadata.phone
+    : (typeof (user as any).phone === 'string' && (user as any).phone)
+      ? (user as any).phone
+      : '';
   const fullName = typeof metadata.full_name === 'string'
     ? metadata.full_name
     : typeof metadata.name === 'string'
@@ -66,10 +71,10 @@ function mapUser(user: {
     id: user.id,
     fullName,
     name: fullName,
-    phone,
+    phone: rawPhone,
     email: user.email || null,
-    username: user.email || phone,
-    role: typeof metadata.role === 'string' ? metadata.role : 'user',
+    username: user.email || rawPhone,
+    role: typeof metadata.role === 'string' ? (metadata.role as any) : 'user',
     referralCode: typeof metadata.referral_code === 'string' ? metadata.referral_code : undefined,
   };
 }
@@ -97,7 +102,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error || !data.user) {
       setUser(null);
     } else {
-      setUser(mapUser(data.user));
+      let mapped = mapUser(data.user);
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name, phone, role')
+          .eq('id', data.user.id)
+          .maybeSingle();
+        if (profile) {
+          mapped = {
+            ...mapped,
+            fullName: profile.full_name || mapped.fullName,
+            name: profile.full_name || mapped.name,
+            phone: profile.phone || mapped.phone,
+            role: (profile.role as any) || mapped.role,
+          };
+        }
+      } catch {}
+      setUser(mapped);
     }
     setIsLoading(false);
   }, []);

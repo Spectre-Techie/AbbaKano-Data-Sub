@@ -114,11 +114,9 @@ export const LedgerView: React.FC = () => {
           </Text>
         </View>
         <View style={styles.txAmountCol}>
-          {tx.type !== 'DATA' && (
-            <Text style={[styles.txAmount, { color: isCredit ? Palette.tertiary : Palette.onSurface }]}>
-              {isCredit ? '+' : '-'}₦{tx.amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
-            </Text>
-          )}
+          <Text style={[styles.txAmount, { color: isCredit ? Palette.tertiary : Palette.onSurface }]}>
+            {isCredit ? '+' : '-'}₦{tx.amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
+          </Text>
           <Text style={[
             styles.txStatusLabel,
             tx.status === 'SUCCESSFUL' ? styles.statusSuccess :
@@ -258,17 +256,26 @@ export const LedgerView: React.FC = () => {
               </View>
 
               <Text style={styles.txDetailTitle}>{selectedTx.title}</Text>
-              {selectedTx.type === 'DATA' ? (
-                <View style={styles.dataBundleStatusBadge}>
-                  <Text style={styles.dataBundleStatusText}>Bundle Delivered</Text>
-                </View>
-              ) : (
-                <Text style={[
-                  styles.txDetailAmount,
-                  { color: selectedTx.type === 'FUND_WALLET' ? Palette.tertiary : Palette.onSurface }
+              <Text style={[
+                styles.txDetailAmount,
+                { color: selectedTx.type === 'FUND_WALLET' ? Palette.tertiary : Palette.onSurface }
+              ]}>
+                {selectedTx.type === 'FUND_WALLET' ? '+' : '-'}₦{selectedTx.amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
+              </Text>
+              {selectedTx.type === 'DATA' && (
+                <View style={[
+                  styles.dataBundleStatusBadge,
+                  selectedTx.status === 'PENDING' && { backgroundColor: 'rgba(238,152,0,0.12)', borderColor: 'rgba(238,152,0,0.3)' },
+                  selectedTx.status === 'FAILED' && { backgroundColor: 'rgba(239,68,68,0.12)', borderColor: 'rgba(239,68,68,0.3)' },
                 ]}>
-                  {selectedTx.type === 'FUND_WALLET' ? '+' : '-'}₦{selectedTx.amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
-                </Text>
+                  <Text style={[
+                    styles.dataBundleStatusText,
+                    selectedTx.status === 'PENDING' && { color: Palette.secondary },
+                    selectedTx.status === 'FAILED' && { color: Palette.error },
+                  ]}>
+                    {selectedTx.status === 'SUCCESSFUL' ? 'Bundle Delivered' : selectedTx.status === 'PENDING' ? 'Delivery In Progress' : 'Delivery Failed'}
+                  </Text>
+                </View>
               )}
 
               <View style={styles.txDetailRows}>

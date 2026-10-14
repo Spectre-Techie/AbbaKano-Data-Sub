@@ -173,6 +173,18 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     return Object.entries(map);
   }, [menuItems]);
 
+  const formattedPhone = useMemo(() => {
+    if (!user.phone) return null;
+    const digits = user.phone.replace(/\D/g, '');
+    if (digits.length === 11 && digits.startsWith('0')) {
+      return `+234 ${digits.slice(1, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
+    }
+    if (digits.length === 13 && digits.startsWith('234')) {
+      return `+234 ${digits.slice(3, 6)} ${digits.slice(6, 9)} ${digits.slice(9)}`;
+    }
+    return user.phone;
+  }, [user.phone]);
+
   return (
     <>
       <ScreenHeader
@@ -202,14 +214,25 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   {user.name || user.fullName || 'User'}
                 </Text>
               </View>
-              <Text style={[styles.profileContact, { color: T.onSurfaceVariant, marginTop: 4 }]} numberOfLines={1} ellipsizeMode="tail">
-                +234 803 459 2811 • {user.email}
-              </Text>
+              <View style={styles.contactDetails}>
+                {formattedPhone ? (
+                  <View style={styles.contactItem}>
+                    <MaterialIcons name="phone" size={13} color={T.primary} />
+                    <Text style={[styles.profileContact, { color: T.onSurfaceVariant }]} numberOfLines={1}>
+                      {formattedPhone}
+                    </Text>
+                  </View>
+                ) : null}
+                {user.email ? (
+                  <View style={styles.contactItem}>
+                    <MaterialIcons name="email" size={13} color={T.onSurfaceMuted} />
+                    <Text style={[styles.profileContact, { color: T.onSurfaceVariant }]} numberOfLines={1} ellipsizeMode="tail">
+                      {user.email}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
             </View>
-
-            <Pressable style={styles.editBtn} hitSlop={8}>
-              <MaterialIcons name="edit" size={18} color={T.onSurfaceVariant} />
-            </Pressable>
           </View>
 
           {/* Balance Row */}
@@ -328,8 +351,9 @@ const styles = StyleSheet.create({
   profileName: { fontSize: 18, fontWeight: '700', fontFamily: Typography.family },
   tierBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(238,152,0,0.12)', borderRadius: Rounded.full, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start' },
   tierBadgeText: { fontSize: 11, fontWeight: '700', fontFamily: Typography.family },
-  profileContact: { fontSize: 12, fontFamily: Typography.family, lineHeight: 16 },
-  editBtn: { padding: 4 },
+  profileContact: { fontSize: 12, fontFamily: Typography.family, lineHeight: 16, flexShrink: 1 },
+  contactDetails: { marginTop: 4, gap: 4 },
+  contactItem: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
 
   profileBalanceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: Rounded.xl, padding: Spacing.three },
   profileBalance: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },

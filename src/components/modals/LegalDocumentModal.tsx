@@ -6,8 +6,8 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
-  StatusBar,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Rounded, Spacing, Typography } from '@/constants/theme';
@@ -43,7 +43,7 @@ export const LegalDocumentModal: React.FC<LegalDocumentModalProps> = ({
       onRequestClose={onClose}
     >
       <SafeAreaView style={[styles.safeArea, { backgroundColor: T.surface }]}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+        <StatusBar style={isDark ? 'light' : 'dark'} />
 
         {/* Modal Header */}
         <View style={[styles.header, { borderBottomColor: T.border }]}>

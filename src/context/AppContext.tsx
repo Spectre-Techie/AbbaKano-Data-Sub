@@ -16,6 +16,7 @@ export type ThemePreference = 'system' | 'dark' | 'light';
 interface AppContextType {
   user: AuthUser;
   mainBalance: number;
+  setMainBalance: React.Dispatch<React.SetStateAction<number>>;
   referralCommissionBalance: number;
   isBalanceMasked: boolean;
   toggleBalanceMask: () => void;
@@ -120,11 +121,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const refreshData = useCallback(async () => {
     if (!user) return;
     try {
-      const [walletRes, txRes, depositRes, referralRes] = await Promise.allSettled([
+      const [walletRes, txRes, depositRes, referralRes, resvRes] = await Promise.allSettled([
         supabase.from('wallets').select('balance_kobo').eq('user_id', user.id).maybeSingle(),
-        supabase.from('vtu_transactions').select('id, transaction_type, amount_kobo, status, created_at, account_number').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
+        supabase.from('vtu_transactions').select('id, transaction_type, amount_kobo, status, created_at, account_number, phone_number, network, provider_reference').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
         supabase.from('deposits').select('id, amount_kobo, status, created_at, reference').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
         supabase.functions.invoke('referral-services', { body: { action: 'summary' } }),
+        supabase.from('wallet_reservations').select('amount_kobo').eq('user_id', user.id).eq('status', 'held'),
       ]);
 
       const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -139,18 +141,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
 
       if (walletRes.status === 'fulfilled' && !walletRes.value.error) {
-        setMainBalance(Number(walletRes.value.data?.balance_kobo || 0) / 100);
+        const rawBalanceKobo = Number(walletRes.value.data?.balance_kobo || 0);
+        let heldKobo = 0;
+        if (resvRes.status === 'fulfilled' && !resvRes.value.error && Array.isArray(resvRes.value.data)) {
+          heldKobo = resvRes.value.data.reduce((acc, row) => acc + Number(row.amount_kobo || 0), 0);
+        }
+        const availableKobo = Math.max(0, rawBalanceKobo - heldKobo);
+        setMainBalance(availableKobo / 100);
       }
       if (txRes.status === 'fulfilled' && !txRes.value.error) {
         const vtuTransactions = (txRes.value.data || [])
           .filter((tx) => !isPendingExpired(tx.status, tx.created_at))
-          .map((tx) => mapServerTx({
-            ...tx,
-            type: String(tx.transaction_type || '').toLowerCase(),
-            amount: Number(tx.amount_kobo || 0) / 100,
-            label: tx.account_number || tx.transaction_type,
-            reference: String(tx.id),
-          }));
+          .map((tx) => {
+            const networkLabel = tx.network ? `${tx.network} ` : '';
+            const typeLabel = String(tx.transaction_type || '').toUpperCase();
+            return mapServerTx({
+              ...tx,
+              type: String(tx.transaction_type || '').toLowerCase(),
+              amount: Number(tx.amount_kobo || 0) / 100,
+              label: `${networkLabel}${typeLabel}`.trim() || tx.account_number || tx.transaction_type,
+              recipient: tx.phone_number || tx.account_number || '',
+              reference: tx.provider_reference || String(tx.id),
+              network: tx.network,
+            });
+          });
 
         const rawDeposits = depositRes.status === 'fulfilled' && !depositRes.value.error
           ? (depositRes.value.data || [])
@@ -197,6 +211,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [user, refreshData]);
 
+  // Realtime balance and transaction sync
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`realtime-user-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'wallets', filter: `user_id=eq.${user.id}` },
+        () => {
+          void refreshData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'vtu_transactions', filter: `user_id=eq.${user.id}` },
+        () => {
+          void refreshData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'deposits', filter: `user_id=eq.${user.id}` },
+        () => {
+          void refreshData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [user?.id, refreshData]);
+
   const toggleBalanceMask = () => setIsBalanceMasked((prev) => !prev);
   const clearNotifications = () => setUnreadNotifications(0);
   const withdrawCommission = useCallback(async () => {
@@ -220,6 +267,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       value={{
         user: contextUser,
         mainBalance,
+        setMainBalance,
         referralCommissionBalance,
         isBalanceMasked,
         toggleBalanceMask,
