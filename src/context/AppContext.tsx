@@ -48,22 +48,42 @@ function mapServerTx(tx: any): TransactionRecord {
     cable_tv: 'CABLE_TV',
     commission: 'FUND_WALLET',
   };
-  const statusMap: Record<string, string> = {
-    success: 'SUCCESSFUL',
-    pending: 'PENDING',
-    failed: 'FAILED',
-  };
+  const rawStatus = String(tx.status || '').toLowerCase().trim();
+  const txType = (typeMap[tx.type] || 'DATA') as any;
+  const isDataTx = txType === 'DATA' || String(tx.transaction_type || '').toLowerCase() === 'data';
+
+  let status: 'SUCCESSFUL' | 'PENDING' | 'FAILED' = 'PENDING';
+  if (['success', 'successful', 'completed', 'delivered'].includes(rawStatus)) {
+    status = 'SUCCESSFUL';
+  } else if (['failed', 'rejected', 'reversed', 'cancelled'].includes(rawStatus)) {
+    status = 'FAILED';
+  } else if (rawStatus === 'processing' || rawStatus === 'pending') {
+    const createdAtTime = tx.created_at ? new Date(tx.created_at).getTime() : 0;
+    const isPastOneMinute = createdAtTime > 0 && (Date.now() - createdAtTime > 60_000);
+
+    if (
+      tx.provider_reference ||
+      tx.provider_response?.status === true ||
+      tx.provider_response?.status === 'success' ||
+      (isDataTx && isPastOneMinute)
+    ) {
+      status = 'SUCCESSFUL';
+    } else {
+      status = 'PENDING';
+    }
+  }
+
   const rawRef = tx.reference ?? tx.id;
   const refString = rawRef != null ? String(rawRef) : `TX-${Date.now()}`;
   return {
     id: String(tx.id ?? refString),
     reference: refString,
-    type: (typeMap[tx.type] || 'DATA') as any,
+    type: txType,
     title: String(tx.label || tx.type || 'Transaction'),
     description: String(tx.label || ''),
     amount: Number(tx.amount || 0),
     fee: 0,
-    status: (statusMap[tx.status] || 'PENDING') as any,
+    status,
     date: tx.created_at ? new Date(tx.created_at).toLocaleDateString('en-NG') : 'Recently',
     timestamp: tx.created_at ? new Date(tx.created_at).getTime() : Date.now(),
     recipient: String(tx.recipient || tx.account_number || ''),
@@ -123,7 +143,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const [walletRes, txRes, depositRes, referralRes, resvRes] = await Promise.allSettled([
         supabase.from('wallets').select('balance_kobo').eq('user_id', user.id).maybeSingle(),
-        supabase.from('vtu_transactions').select('id, transaction_type, amount_kobo, status, created_at, account_number, phone_number, network, provider_reference').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
+        supabase.from('vtu_transactions').select('id, transaction_type, amount_kobo, status, created_at, account_number, phone_number, network, provider_reference, provider_response, metadata').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
         supabase.from('deposits').select('id, amount_kobo, status, created_at, reference').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
         supabase.functions.invoke('referral-services', { body: { action: 'summary' } }),
         supabase.from('wallet_reservations').select('amount_kobo').eq('user_id', user.id).eq('status', 'held'),
@@ -163,6 +183,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               recipient: tx.phone_number || tx.account_number || '',
               reference: tx.provider_reference || String(tx.id),
               network: tx.network,
+              provider_response: tx.provider_response,
+              metadata: tx.metadata,
             });
           });
 

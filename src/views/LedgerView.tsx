@@ -114,9 +114,11 @@ export const LedgerView: React.FC = () => {
           </Text>
         </View>
         <View style={styles.txAmountCol}>
-          <Text style={[styles.txAmount, { color: isCredit ? Palette.tertiary : Palette.onSurface }]}>
-            {isCredit ? '+' : '-'}₦{tx.amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
-          </Text>
+          {tx.type !== 'DATA' && (
+            <Text style={[styles.txAmount, { color: isCredit ? Palette.tertiary : Palette.onSurface }]}>
+              {isCredit ? '+' : '-'}₦{tx.amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
+            </Text>
+          )}
           <Text style={[
             styles.txStatusLabel,
             tx.status === 'SUCCESSFUL' ? styles.statusSuccess :
@@ -256,12 +258,14 @@ export const LedgerView: React.FC = () => {
               </View>
 
               <Text style={styles.txDetailTitle}>{selectedTx.title}</Text>
-              <Text style={[
-                styles.txDetailAmount,
-                { color: selectedTx.type === 'FUND_WALLET' ? Palette.tertiary : Palette.onSurface }
-              ]}>
-                {selectedTx.type === 'FUND_WALLET' ? '+' : '-'}₦{selectedTx.amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
-              </Text>
+              {selectedTx.type !== 'DATA' && (
+                <Text style={[
+                  styles.txDetailAmount,
+                  { color: selectedTx.type === 'FUND_WALLET' ? Palette.tertiary : Palette.onSurface }
+                ]}>
+                  {selectedTx.type === 'FUND_WALLET' ? '+' : '-'}₦{selectedTx.amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
+                </Text>
+              )}
               {selectedTx.type === 'DATA' && (
                 <View style={[
                   styles.dataBundleStatusBadge,
