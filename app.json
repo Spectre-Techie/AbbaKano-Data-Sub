@@ -14,7 +14,6 @@
       "package": "com.abbakano.datasub",
       "versionCode": 2,
       "softwareKeyboardLayoutMode": "resize",
-      "resizeableActivity": true,
       "permissions": [
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
