@@ -47,5 +47,9 @@ example
 
 # agent & IDE assistants
 .agent/
+.agents/
 .claude/
-
+skills-lock.json
+*.py
+__pycache__/
+assets/screenshots/

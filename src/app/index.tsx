@@ -17,7 +17,7 @@ import { VtuView } from '@/views/VtuView';
 import { AirtimeView } from '@/views/AirtimeView';
 import { ElectricityView } from '@/views/ElectricityView';
 import { CableTvView } from '@/views/CableTvView';
-import { FundWalletView } from '@/views/FundWalletView';
+import { FundWalletModal } from '@/views/FundWalletView';
 import { LedgerView } from '@/views/LedgerView';
 import { ProfileView } from '@/views/ProfileView';
 import { ReferEarnView } from '@/views/ReferEarnView';
@@ -309,9 +309,7 @@ export default function App() {
   return (
     <SafeAreaView key={effectiveTheme} style={[styles.fill, bg]}>
       <View style={[styles.fill, bg]}>
-        {showFundWallet ? (
-          <FundWalletView onBackPress={() => setShowFundWallet(false)} />
-        ) : showReferEarn ? (
+        {showReferEarn ? (
           <ReferEarnView onBackPress={() => setShowReferEarn(false)} />
         ) : showSupport ? (
           <SupportView onBackPress={() => setShowSupport(false)} />
@@ -365,6 +363,7 @@ export default function App() {
       <AppBottomNav activeTab={activeTab} onTabChange={handleNavigateTab} />
 
       {/* Global Overlays */}
+      <FundWalletModal visible={showFundWallet} onClose={() => setShowFundWallet(false)} />
       <CheckoutSheet />
       <PinAuthModal />
       <ReceiptModal />

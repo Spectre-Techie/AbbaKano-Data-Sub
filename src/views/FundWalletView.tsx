@@ -1,634 +1,456 @@
-import { ScreenHeader } from "@/components/common/ScreenHeader";
 import { PaletteType, Rounded, Spacing, Typography } from "@/constants/theme";
 import { useApp } from "@/context/AppContext";
 import { MaterialIcons } from "@expo/vector-icons";
-import * as WebBrowser from 'expo-web-browser';
+import * as Clipboard from 'expo-clipboard';
 import React, { useMemo, useState } from "react";
 import {
-  Alert,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import { supabase } from '@/lib/supabase';
-import { FormInput } from '@/components/common/FormInput';
 
-interface FundWalletViewProps {
+export interface FundWalletModalProps {
+  visible?: boolean;
+  onClose?: () => void;
   onBackPress?: () => void;
 }
 
-type PaystackResponse = {
-  authorization_url?: string;
-  authorizationUrl?: string;
-};
-
-export const FundWalletView: React.FC<FundWalletViewProps> = ({
+export const FundWalletModal: React.FC<FundWalletModalProps> = ({
+  visible = true,
+  onClose,
   onBackPress,
 }) => {
-  const { virtualAccounts, theme: Palette } = useApp();
+  const { virtualAccounts, user, refreshData, theme: Palette } = useApp();
   const styles = useMemo(() => getStyles(Palette), [Palette]);
-  const [copiedAccount, setCopiedAccount] = useState<string | null>(null);
-  const [gatewayExpanded, setGatewayExpanded] = useState(false);
-  const [amount, setAmount] = useState('1000');
-  const [isStartingPayment, setIsStartingPayment] = useState(false);
-  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const startPaystack = async () => {
-    const value = Number(amount);
-    if (!Number.isInteger(value) || value < 100 || value > 1000000) {
-      setPaymentError('Enter an amount between ₦100 and ₦1,000,000.');
-      return;
-    }
-    setIsStartingPayment(true);
-    setPaymentError(null);
+  const handleClose = onClose || onBackPress || (() => {});
+
+  const handleCopy = async (accountNumber: string, bankName: string) => {
     try {
-      const paymentResult = await supabase.functions.invoke(
-        'initialize-paystack',
-        { body: { amount: value } }
-      );
-      const response = paymentResult.data;
-      const error = paymentResult.error;
-      if (error) throw error;
-      const paystackResponse = response as PaystackResponse | null;
-      const authorizationUrl = paystackResponse?.authorization_url || paystackResponse?.authorizationUrl;
-      if (!authorizationUrl) throw new Error('We could not start your payment. Please try again.');
-      await WebBrowser.openBrowserAsync(authorizationUrl);
-    } catch (error) {
-      console.error('Could not start wallet funding:', error);
-      setPaymentError(error instanceof Error && error.message.startsWith('We could not')
-        ? error.message
-        : 'Could not start payment. Please try again.');
-    } finally {
-      setIsStartingPayment(false);
+      await Clipboard.setStringAsync(accountNumber.replace(/\s/g, ''));
+      const shortBank = bankName.replace(/bank/i, '').trim();
+      const message = shortBank ? `${shortBank} Copied to Clipboard` : 'Copied to Clipboard';
+      setToastMessage(message);
+      setTimeout(() => {
+        setToastMessage(null);
+      }, 2000);
+    } catch {
+      setToastMessage('Copied to Clipboard');
+      setTimeout(() => {
+        setToastMessage(null);
+      }, 2000);
     }
   };
 
-  const handleCopy = (accountNumber: string, displayNumber: string) => {
-    // On native we'd use Clipboard, here we simulate
-    setCopiedAccount(accountNumber);
-    setTimeout(() => setCopiedAccount(null), 2000);
-    Alert.alert(
-      "Copied!",
-      `Account number ${displayNumber} copied to clipboard.`,
-    );
-  };
+  const userDisplayName = (user?.fullName || user?.name || 'Customer').trim();
 
   return (
-    <View style={styles.container}>
-      <ScreenHeader
-        title="Fund Wallet"
-        subtitle="Virtual Accounts & Auto-Credit Engine"
-        showBack={true}
-        onBackPress={onBackPress}
-      />
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* === DEDICATED TRANSFER ACCOUNTS (MONNIFY 3-BANK ENGINE) === */}
-        <View style={styles.accountsSectionHeader}>
-          <View style={styles.accountsSectionLeft}>
-            <MaterialIcons
-              name="account-balance"
-              size={20}
-              color={Palette.primary}
-            />
-            <Text style={styles.accountsSectionTitle} numberOfLines={1}>
-              Dedicated Virtual Accounts
-            </Text>
-          </View>
-          <View style={styles.autoSyncBadge}>
-            <View style={styles.autoSyncDot} />
-            <Text style={styles.autoSyncText}>MONNIFY SYNC</Text>
-          </View>
-        </View>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={handleClose}
+      statusBarTranslucent
+    >
+      <View style={styles.backdrop}>
+        <Pressable style={styles.backdropPressable} onPress={handleClose} />
 
-        <Text style={styles.accountsSubtitle}>
-          Choose any of your 3 dedicated bank accounts. Transfers reflect automatically in 15–30 seconds.
-        </Text>
-
-        {/* 3 Virtual Accounts (Moniepoint, Sterling, Wema / Others) */}
-        {virtualAccounts.map((account, idx) => {
-          const isMoniepoint = /moniepoint/i.test(account.bankName);
-          const isSterling = /sterling/i.test(account.bankName);
-          const isWema = /wema/i.test(account.bankName);
-          const brandColor = isMoniepoint ? '#0047cc' : isSterling ? '#d32f2f' : isWema ? '#93186c' : Palette.primary;
-          const badgeText = isMoniepoint ? 'Fastest • Recommended' : isSterling ? 'Monnify Dedicated' : 'Backup Desk';
-          const subLabel = isMoniepoint ? 'Automated Virtual Gateway • ~15s' : isSterling ? 'Monnify Dedicated Reserve Desk' : 'Automated Virtual Desk • < 30s';
-
-          return (
-            <View
-              key={idx}
-              style={[
-                styles.accountCard,
-                idx === 0 && { borderColor: brandColor },
-              ]}
-            >
-              <View style={styles.accountCardTop}>
-                <View style={styles.accountLeft}>
-                  <View style={[styles.accountIconBox, { backgroundColor: `${brandColor}18` }]}>
-                    <MaterialIcons
-                      name={isMoniepoint ? "bolt" : isSterling ? "account-balance" : "credit-card"}
-                      size={20}
-                      color={brandColor}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.bankName, { color: brandColor }]} numberOfLines={1}>
-                      {account.bankName}
-                    </Text>
-                    <Text style={styles.bankSubLabel} numberOfLines={1} ellipsizeMode="tail">
-                      {subLabel}
-                    </Text>
-                  </View>
-                </View>
-                <View
-                  style={[
-                    styles.recommendedBadge,
-                    { backgroundColor: `${brandColor}15` },
-                  ]}
-                >
-                  <MaterialIcons
-                    name="verified"
-                    size={13}
-                    color={brandColor}
-                  />
-                  <Text style={[styles.recommendedText, { color: brandColor }]}>
-                    {badgeText}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Account Number Row */}
-              <View style={styles.accountNumberBox}>
-                <Text style={styles.accountNumberLabel}>Account Number</Text>
-                <View style={styles.accountNumberRow}>
-                  <Text
-                    style={[
-                      styles.accountNumber,
-                      { color: brandColor },
-                    ]}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                  >
-                    {account.accountNumber}
-                  </Text>
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.copyBtn,
-                      pressed && { opacity: 0.75 },
-                    ]}
-                    onPress={() =>
-                      handleCopy(
-                        account.accountNumber.replace(/\s/g, ""),
-                        account.accountNumber,
-                      )
-                    }
-                  >
-                    <MaterialIcons
-                      name={
-                        copiedAccount === account.accountNumber.replace(/\s/g, "")
-                          ? "check"
-                          : "content-copy"
-                      }
-                      size={16}
-                      color={brandColor}
-                    />
-                    <Text style={[styles.copyBtnText, { color: brandColor }]}>
-                      {copiedAccount === account.accountNumber.replace(/\s/g, "")
-                        ? "Copied!"
-                        : "Copy"}
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-
-              {/* Account Name Row */}
-              <View style={styles.accountNameRow}>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={styles.accountNameLabel} numberOfLines={1}>
-                    Beneficiary Account Name
-                  </Text>
-                  <Text style={styles.accountNameValue} numberOfLines={1} ellipsizeMode="tail">
-                    {account.accountName}
-                  </Text>
-                </View>
-                <View style={styles.verifiedBadge}>
-                  <MaterialIcons
-                    name="check-circle"
-                    size={14}
-                    color={Palette.tertiary}
-                  />
-                  <Text style={styles.verifiedText}>Auto-Credit</Text>
-                </View>
-              </View>
-            </View>
-          );
-        })}
-
-        {/* === CARD & BANK TRANSFER (Paystack) === */}
-        <View style={styles.gatewayCard}>
-          <Pressable
-            style={styles.gatewayToggleBtn}
-            onPress={() => setGatewayExpanded(!gatewayExpanded)}
-          >
-            <View style={styles.gatewayLeft}>
-              <View style={styles.gatewayIconBox}>
-                <MaterialIcons
-                  name="credit-card"
-                  size={22}
-                  color={Palette.primary}
-                />
-              </View>
-              <View>
-                <Text style={styles.gatewayTitle}>
-                  Debit Card & Bank Transfer
-                </Text>
-                <Text style={styles.gatewaySubtitle}>
-                  Powered securely by Paystack
-                </Text>
-              </View>
-            </View>
-            <MaterialIcons
-              name={gatewayExpanded ? "expand-less" : "expand-more"}
-              size={22}
-              color={Palette.onSurfaceVariant}
-            />
-          </Pressable>
-          {gatewayExpanded && (
-            <View style={styles.gatewayContent}>
-              <Text style={styles.gatewayContentNote}>
-                Tap below to initiate a secure card or bank transfer via
-                Paystack. Minimum ₦100.
-              </Text>
-              <FormInput
-                label="Amount to fund (₦)"
-                value={amount}
-                onChangeText={setAmount}
-                keyboardType="numeric"
-                leftIcon={<MaterialIcons name="payments" size={18} color={Palette.onSurfaceMuted} />}
-              />
-              {paymentError && <Text style={styles.gatewayContentNote}>{paymentError}</Text>}
-              <Pressable
-                style={({ pressed }) => [
-                  styles.paystackBtn,
-                  pressed && { opacity: 0.85 },
-                ]}
-                onPress={() => void startPaystack()}
-                disabled={isStartingPayment}
-              >
-                <MaterialIcons name="lock" size={20} color="#FFFFFF" />
-                <Text style={styles.paystackBtnText}>
-                  {isStartingPayment ? 'Opening Checkout...' : 'Proceed to Secure Checkout'}
-                </Text>
-              </Pressable>
+        <View style={styles.modalCard}>
+          {/* Toast Notification Pill */}
+          {toastMessage && (
+            <View style={styles.toast}>
+              <MaterialIcons name="check-circle" size={16} color={Palette.tertiary} />
+              <Text style={styles.toastText}>{toastMessage}</Text>
             </View>
           )}
-        </View>
 
-        {/* === SECURITY NOTICE === */}
-        <View style={styles.securityCard}>
-          <View style={styles.securityIconBox}>
-            <MaterialIcons
-              name="verified-user"
-              size={20}
-              color={Palette.tertiary}
-            />
-          </View>
-          <View style={styles.securityText}>
-            <Text style={styles.securityTitle}>
-              NDPR Compliant & Bank Grade Security
-            </Text>
-            <Text style={styles.securitySubtitle}>
-              Dedicated virtual accounts are issued by CBN-licensed financial
-              institutions and protected with 256-bit encryption.
-            </Text>
-          </View>
-        </View>
+          {/* Modal Header */}
+          <View style={styles.modalHeader}>
+            <View style={{ flex: 1, marginRight: Spacing.two }}>
+              <Text style={styles.modalTitle} numberOfLines={1}>
+                Fund Wallet
+              </Text>
+              <Text style={styles.modalSubtitle} numberOfLines={1}>
+                Dedicated Virtual Accounts
+              </Text>
+            </View>
 
-        <View style={{ height: 100 }} />
-      </ScrollView>
-    </View>
+            <Pressable
+              style={({ pressed }) => [
+                styles.closeButton,
+                pressed && { opacity: 0.75 },
+              ]}
+              onPress={handleClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              hitSlop={8}
+            >
+              <MaterialIcons name="close" size={20} color={Palette.onSurface} />
+            </Pressable>
+          </View>
+
+          <Text style={styles.sectionNotice}>
+            Transfer to any account below. Your wallet is automatically credited in 15–30 seconds.
+          </Text>
+
+          {/* Accounts List */}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+          >
+            {virtualAccounts.length > 0 ? (
+              virtualAccounts.map((account, idx) => {
+                const cleanAccountNumber = account.accountNumber.replace(/\s/g, '');
+                const beneficiaryName =
+                  account.accountName || `AbbaKano - ${userDisplayName} (${account.bankName})`;
+
+                return (
+                  <View
+                    key={`${account.bankName}-${account.accountNumber}-${idx}`}
+                    style={styles.accountCard}
+                  >
+                    {/* Bank Header Row */}
+                    <View style={styles.accountCardTop}>
+                      <View style={styles.bankInfoLeft}>
+                        <View style={styles.bankIconBox}>
+                          <MaterialIcons
+                            name="account-balance"
+                            size={18}
+                            color={Palette.primary}
+                          />
+                        </View>
+                        <Text style={styles.bankName} numberOfLines={1}>
+                          {account.bankName.toUpperCase()}
+                        </Text>
+                      </View>
+
+                      <View style={styles.autoCreditBadge}>
+                        <View style={styles.autoCreditDot} />
+                        <Text style={styles.autoCreditText}>Auto-Credit</Text>
+                      </View>
+                    </View>
+
+                    {/* Account Number Box */}
+                    <View style={styles.accountNumberBox}>
+                      <Text style={styles.accountNumberLabel}>Account Number</Text>
+                      <View style={styles.accountNumberRow}>
+                        <Text
+                          style={styles.accountNumber}
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                        >
+                          {account.accountNumber}
+                        </Text>
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.copyBtn,
+                            pressed && { opacity: 0.75 },
+                          ]}
+                          onPress={() => void handleCopy(cleanAccountNumber, account.bankName)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Copy ${account.bankName} account number`}
+                        >
+                          <MaterialIcons
+                            name="content-copy"
+                            size={15}
+                            color={Palette.primary}
+                          />
+                          <Text style={styles.copyBtnText}>Copy</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+
+                    {/* Beneficiary Name Row */}
+                    <View style={styles.beneficiaryRow}>
+                      <Text style={styles.beneficiaryLabel} numberOfLines={1}>
+                        Beneficiary Name
+                      </Text>
+                      <Text style={styles.beneficiaryValue} numberOfLines={2}>
+                        {beneficiaryName}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })
+            ) : (
+              <View style={styles.loadingContainer}>
+                <MaterialIcons name="sync" size={28} color={Palette.primary} />
+                <Text style={styles.loadingTitle}>Synchronizing Accounts</Text>
+                <Text style={styles.loadingSubtitle}>
+                  Loading your dedicated virtual bank accounts...
+                </Text>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.refreshBtn,
+                    pressed && { opacity: 0.8 },
+                  ]}
+                  onPress={() => void refreshData(true)}
+                >
+                  <Text style={styles.refreshBtnText}>Reload Accounts</Text>
+                </Pressable>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   );
+};
+
+export const FundWalletView: React.FC<FundWalletModalProps> = (props) => {
+  return <FundWalletModal {...props} />;
 };
 
 const getStyles = (Palette: PaletteType) =>
   StyleSheet.create({
-    container: {
+    backdrop: {
       flex: 1,
-      backgroundColor: Palette.canvas,
-    },
-    scroll: {
-      flex: 1,
-    },
-    content: {
+      backgroundColor: 'rgba(0, 0, 0, 0.72)',
+      justifyContent: 'center',
+      alignItems: 'center',
       padding: Spacing.four,
-      gap: Spacing.four,
     },
-
-    // Accounts Section Header
-    accountsSectionHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: 8,
+    backdropPressable: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
     },
-    accountsSectionLeft: {
-      flexDirection: "row",
-      alignItems: "center",
+    modalCard: {
+      width: '100%',
+      maxWidth: 420,
+      maxHeight: '85%',
+      backgroundColor: Palette.surface,
+      borderRadius: Rounded.xxl,
+      borderWidth: 1,
+      borderColor: Palette.border,
+      padding: Spacing.four,
+      overflow: 'hidden',
+    },
+    toast: {
+      position: 'absolute',
+      top: Spacing.three,
+      alignSelf: 'center',
+      zIndex: 99,
+      flexDirection: 'row',
+      alignItems: 'center',
       gap: 6,
-      flex: 1,
-      flexShrink: 1,
+      backgroundColor: Palette.surfaceHighest,
+      borderWidth: 1,
+      borderColor: Palette.borderHigh,
+      paddingHorizontal: Spacing.three,
+      paddingVertical: 7,
+      borderRadius: Rounded.full,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 5,
     },
-    accountsSectionTitle: {
-      fontSize: 15,
-      fontWeight: "700",
+    toastText: {
+      fontSize: 12,
+      fontWeight: '700',
       color: Palette.onSurface,
       fontFamily: Typography.family,
-      flexShrink: 1,
     },
-    accountsSubtitle: {
+    modalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingBottom: Spacing.two,
+      borderBottomWidth: 1,
+      borderBottomColor: Palette.border,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: '800',
+      color: Palette.onSurface,
+      fontFamily: Typography.family,
+      letterSpacing: 0.3,
+    },
+    modalSubtitle: {
+      fontSize: 12,
+      color: Palette.onSurfaceMuted,
+      fontFamily: Typography.family,
+      marginTop: 2,
+    },
+    closeButton: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: Palette.surfaceHigh,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: Palette.border,
+    },
+    sectionNotice: {
       fontSize: 12,
       color: Palette.onSurfaceVariant,
       fontFamily: Typography.family,
       lineHeight: 18,
-      marginTop: -Spacing.two,
-      marginBottom: Spacing.one,
+      marginTop: Spacing.three,
+      marginBottom: Spacing.three,
     },
-    autoSyncBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      backgroundColor: "rgba(0, 208, 132, 0.10)",
+    scrollContent: {
+      gap: Spacing.three,
+      paddingBottom: Spacing.two,
+    },
+    accountCard: {
+      backgroundColor: Palette.surfaceLow,
+      borderRadius: Rounded.xl,
+      padding: Spacing.three,
+      borderWidth: 1,
+      borderColor: Palette.border,
+      gap: Spacing.two,
+    },
+    accountCardTop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    bankInfoLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.two,
+      flex: 1,
+      marginRight: Spacing.two,
+    },
+    bankIconBox: {
+      width: 32,
+      height: 32,
+      borderRadius: Rounded.lg,
+      backgroundColor: Palette.surfaceHigh,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    bankName: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: Palette.onSurface,
+      fontFamily: Typography.family,
+      letterSpacing: 0.5,
+    },
+    autoCreditBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      backgroundColor: 'rgba(0, 208, 132, 0.12)',
       borderRadius: Rounded.full,
       paddingHorizontal: 8,
-      paddingVertical: 4,
+      paddingVertical: 3,
     },
-    autoSyncDot: {
+    autoCreditDot: {
       width: 6,
       height: 6,
       borderRadius: 3,
       backgroundColor: Palette.tertiary,
     },
-    autoSyncText: {
+    autoCreditText: {
       fontSize: 10,
-      fontWeight: "700",
+      fontWeight: '700',
       color: Palette.tertiary,
-      fontFamily: Typography.family,
-      letterSpacing: 0.5,
-    },
-
-    // Account Card
-    accountCard: {
-      backgroundColor: Palette.surface,
-      borderRadius: Rounded.xl,
-      padding: Spacing.four,
-      borderWidth: 1,
-      borderColor: Palette.border,
-      gap: Spacing.three,
-    },
-    accountCardTop: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      flexWrap: "wrap",
-      gap: 8,
-    },
-    accountLeft: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: Spacing.two,
-      flex: 1,
-      flexShrink: 1,
-      minWidth: 0,
-    },
-    accountIconBox: {
-      width: 32,
-      height: 32,
-      borderRadius: Rounded.lg,
-      backgroundColor: Palette.surfaceHigh,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    bankName: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: Palette.onSurface,
-      fontFamily: Typography.family,
-    },
-    bankSubLabel: {
-      fontSize: 11,
-      color: Palette.onSurfaceMuted,
-      fontFamily: Typography.family,
-    },
-    recommendedBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      backgroundColor: "rgba(0, 208, 132, 0.12)",
-      borderRadius: Rounded.full,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      flexShrink: 0,
-      overflow: "hidden",
-    },
-    recommendedText: {
-      fontSize: 11,
-      fontWeight: "700",
-      color: Palette.tertiary,
-      fontFamily: Typography.family,
-    },
-    altBadge: {
-      backgroundColor: Palette.surfaceHigh,
-      borderRadius: Rounded.full,
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-    },
-    altBadgeText: {
-      fontSize: 11,
-      color: Palette.onSurfaceVariant,
       fontFamily: Typography.family,
     },
     accountNumberBox: {
-      backgroundColor: Palette.surfaceLow,
-      borderRadius: Rounded.xl,
+      backgroundColor: Palette.surface,
+      borderRadius: Rounded.lg,
       padding: Spacing.three,
       gap: 4,
+      borderWidth: 1,
+      borderColor: Palette.border,
     },
     accountNumberLabel: {
       fontSize: 10,
-      fontWeight: "700",
+      fontWeight: '700',
       color: Palette.onSurfaceMuted,
-      textTransform: "uppercase",
+      textTransform: 'uppercase',
       letterSpacing: 0.6,
       fontFamily: Typography.family,
     },
     accountNumberRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 8,
     },
     accountNumber: {
-      fontSize: 24,
-      fontWeight: "800",
+      fontSize: 22,
+      fontWeight: '800',
       color: Palette.onSurface,
       letterSpacing: 2,
       fontFamily: Typography.family,
       flex: 1,
-      minWidth: 0,
     },
     copyBtn: {
-      flexDirection: "row",
-      alignItems: "center",
+      flexDirection: 'row',
+      alignItems: 'center',
       gap: 4,
-      backgroundColor: Palette.surfaceHighest,
-      borderRadius: Rounded.xl,
+      backgroundColor: Palette.surfaceHigh,
+      borderRadius: Rounded.lg,
       paddingHorizontal: Spacing.three,
-      paddingVertical: 8,
+      paddingVertical: 6,
       borderWidth: 1,
       borderColor: Palette.border,
     },
     copyBtnText: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: Palette.onSurface,
+      fontSize: 12,
+      fontWeight: '700',
+      color: Palette.primary,
       fontFamily: Typography.family,
     },
-    accountNameRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
+    beneficiaryRow: {
+      paddingHorizontal: 4,
+      gap: 2,
     },
-    accountNameLabel: {
-      fontSize: 11,
+    beneficiaryLabel: {
+      fontSize: 10,
       color: Palette.onSurfaceMuted,
       fontFamily: Typography.family,
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
     },
-    accountNameValue: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: Palette.onSurface,
-      fontFamily: Typography.family,
-      marginTop: 2,
-    },
-    verifiedBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      backgroundColor: "rgba(0, 208, 132, 0.10)",
-      borderRadius: Rounded.full,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-    },
-    verifiedText: {
-      fontSize: 11,
-      fontWeight: "700",
-      color: Palette.tertiary,
+    beneficiaryValue: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: Palette.onSurfaceVariant,
       fontFamily: Typography.family,
     },
-
-    // Gateway Card
-    gatewayCard: {
-      backgroundColor: Palette.surface,
-      borderRadius: Rounded.xl,
-      borderWidth: 1,
-      borderColor: Palette.border,
-      overflow: "hidden",
+    loadingContainer: {
+      padding: Spacing.five,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Spacing.two,
     },
-    gatewayToggleBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      padding: Spacing.four,
-    },
-    gatewayLeft: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: Spacing.three,
-    },
-    gatewayIconBox: {
-      width: 40,
-      height: 40,
-      borderRadius: Rounded.xl,
-      backgroundColor: "rgba(37, 99, 235, 0.12)",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    gatewayTitle: {
-      fontSize: 14,
-      fontWeight: "700",
+    loadingTitle: {
+      fontSize: 15,
+      fontWeight: '700',
       color: Palette.onSurface,
       fontFamily: Typography.family,
     },
-    gatewaySubtitle: {
+    loadingSubtitle: {
       fontSize: 12,
       color: Palette.onSurfaceMuted,
       fontFamily: Typography.family,
+      textAlign: 'center',
     },
-    gatewayContent: {
-      padding: Spacing.four,
-      paddingTop: 0,
-      gap: Spacing.three,
-    },
-    gatewayContentNote: {
-      fontSize: 13,
-      color: Palette.onSurfaceVariant,
-      fontFamily: Typography.family,
-      lineHeight: 20,
-    },
-    paystackBtn: {
-      height: 48,
+    refreshBtn: {
+      marginTop: 8,
       backgroundColor: Palette.primary,
-      borderRadius: Rounded.xl,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 8,
+      paddingHorizontal: Spacing.four,
+      paddingVertical: Spacing.two,
+      borderRadius: Rounded.lg,
     },
-    paystackBtnText: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: "#FFFFFF",
-      fontFamily: Typography.family,
-    },
-
-    // Security
-    securityCard: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      gap: Spacing.three,
-      backgroundColor: Palette.surfaceLow,
-      borderRadius: Rounded.xl,
-      padding: Spacing.four,
-    },
-    securityIconBox: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: Palette.surface,
-      alignItems: "center",
-      justifyContent: "center",
-      flexShrink: 0,
-    },
-    securityText: {
-      flex: 1,
-      gap: 4,
-    },
-    securityTitle: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: Palette.onSurface,
-      fontFamily: Typography.family,
-    },
-    securitySubtitle: {
+    refreshBtnText: {
+      color: '#FFFFFF',
       fontSize: 12,
-      color: Palette.onSurfaceVariant,
+      fontWeight: '700',
       fontFamily: Typography.family,
-      lineHeight: 18,
     },
-
   });

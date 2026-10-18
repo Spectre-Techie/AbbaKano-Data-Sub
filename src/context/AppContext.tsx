@@ -1,14 +1,14 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Appearance } from 'react-native';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { Appearance, AppState, AppStateStatus } from 'react-native';
 import {
   VirtualAccount,
   TransactionRecord,
   KycTierInfo,
   MOCK_KYC_TIERS,
-  MOCK_VIRTUAL_ACCOUNTS,
 } from '@/constants/mockData';
 import { getPalette, setActiveThemeMode, PaletteType } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
+import { preloadDataPlans } from '@/services/dataService';
 import { useAuth, AuthUser } from './AuthContext';
 
 export type ThemePreference = 'system' | 'dark' | 'light';
@@ -23,7 +23,7 @@ interface AppContextType {
   virtualAccounts: VirtualAccount[];
   transactions: TransactionRecord[];
   kycTiers: KycTierInfo[];
-  refreshData: () => Promise<void>;
+  refreshData: (force?: boolean) => Promise<void>;
   withdrawCommission: () => Promise<boolean>;
   updateKycTier: (tier: KycTierInfo | KycTierInfo['tier']) => void;
   unreadNotifications: number;
@@ -90,15 +90,6 @@ function mapServerTx(tx: any): TransactionRecord {
   };
 }
 
-function mapServerVirtualAccount(raw: any): VirtualAccount {
-  return {
-    bankName: raw.bankName || raw.bank_name || 'Bank',
-    accountNumber: raw.accountNumber || raw.account_number || '',
-    accountName: raw.accountName || raw.account_name || '',
-    recommended: true,
-  };
-}
-
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const contextUser: AuthUser = user || { id: 'guest', name: 'Guest', phone: '', email: null, role: 'user' };
@@ -107,7 +98,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [referralCommissionBalance, setReferralCommissionBalance] = useState<number>(0);
   const [isBalanceMasked, setIsBalanceMasked] = useState<boolean>(false);
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
-  const [virtualAccounts, setVirtualAccounts] = useState<VirtualAccount[]>(MOCK_VIRTUAL_ACCOUNTS);
+  const [virtualAccounts, setVirtualAccounts] = useState<VirtualAccount[]>([]);
   const [kycTiers, setKycTiers] = useState<KycTierInfo[]>(MOCK_KYC_TIERS);
   const [unreadNotifications, setUnreadNotifications] = useState<number>(0);
 
@@ -137,9 +128,70 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  // ── Fetch live data from backend ─────────────────────────────────────────
-  const refreshData = useCallback(async () => {
+  // ── Battery & Performance Throttle Refs ─────────────────────────────────
+  const lastRefreshRef = useRef<number>(0);
+  const refreshInFlightRef = useRef<boolean>(false);
+  const cancelledDepositIdsRef = useRef<Set<string>>(new Set());
+
+  // ── Fetch Monnify Virtual Accounts with User-Customized Name ─────────────
+  const loadVirtualAccounts = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      // 1. Invoke edge function
+      const { data: edgeData, error: edgeError } = await supabase.functions.invoke('virtual-accounts', {});
+      let rawAccounts: any[] = [];
+      if (!edgeError && edgeData && Array.isArray((edgeData as any).accounts)) {
+        rawAccounts = (edgeData as any).accounts;
+      }
+
+      // 2. Fallback to user_virtual_accounts table if empty
+      if (rawAccounts.length === 0) {
+        const { data: tableData } = await supabase
+          .from('user_virtual_accounts')
+          .select('bank_name, account_number, account_name')
+          .eq('user_id', user.id);
+        if (Array.isArray(tableData) && tableData.length > 0) {
+          rawAccounts = tableData;
+        }
+      }
+
+      if (rawAccounts.length > 0) {
+        const userFullName = (user.fullName || user.name || 'Customer').trim();
+        const mapped: VirtualAccount[] = [];
+        for (const raw of rawAccounts) {
+          const bankName = String(raw.bankName || raw.bank_name || 'Bank').trim();
+          const accountNumber = String(raw.accountNumber || raw.account_number || '').trim();
+          if (!bankName || !accountNumber) continue;
+          // Name for active user customized with the virtual bank name
+          const accountName = `AbbaKano - ${userFullName} (${bankName})`;
+          mapped.push({
+            bankName,
+            accountNumber,
+            accountName,
+            recommended: true,
+          });
+        }
+
+        if (mapped.length > 0) {
+          setVirtualAccounts(mapped);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load virtual accounts:', err);
+    }
+  }, [user]);
+
+  // ── Fetch live data from backend (throttled) ─────────────────────────────
+  const refreshData = useCallback(async (force = false) => {
     if (!user) return;
+    const now = Date.now();
+    if (!force && now - lastRefreshRef.current < 2500) {
+      return; // throttle rapid requests to preserve battery & CPU
+    }
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    lastRefreshRef.current = now;
+
     try {
       const [walletRes, txRes, depositRes, referralRes, resvRes] = await Promise.allSettled([
         supabase.from('wallets').select('balance_kobo').eq('user_id', user.id).maybeSingle(),
@@ -150,7 +202,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ]);
 
       const ONE_HOUR_MS = 60 * 60 * 1000;
-      const now = Date.now();
 
       const isPendingExpired = (status?: string, createdAt?: string | number) => {
         const s = String(status || '').toLowerCase();
@@ -169,6 +220,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const availableKobo = Math.max(0, rawBalanceKobo - heldKobo);
         setMainBalance(availableKobo / 100);
       }
+
       if (txRes.status === 'fulfilled' && !txRes.value.error) {
         const vtuTransactions = (txRes.value.data || [])
           .filter((tx) => !isPendingExpired(tx.status, tx.created_at))
@@ -192,7 +244,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ? (depositRes.value.data || [])
           : [];
 
-        // Any pending deposit older than 1 hour is considered abandoned/cancelled and disappears from the UI
+        // Any pending deposit older than 1 hour is considered abandoned/cancelled
         const deposits = rawDeposits
           .filter((deposit) => !isPendingExpired(deposit.status, deposit.created_at))
           .map((deposit) => mapServerTx({
@@ -203,68 +255,117 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             reference: deposit.reference || deposit.id,
           }));
 
-        // Proactively update expired pending deposits to cancelled in Supabase
+        // Proactively update expired pending deposits once (deduplicated to avoid infinite Realtime loops)
         const expiredDepositIds = rawDeposits
-          .filter((d) => isPendingExpired(d.status, d.created_at))
-          .map((d) => d.id);
+          .filter((d) => isPendingExpired(d.status, d.created_at) && !cancelledDepositIdsRef.current.has(String(d.id)))
+          .map((d) => String(d.id));
         if (expiredDepositIds.length > 0) {
+          for (const id of expiredDepositIds) {
+            cancelledDepositIdsRef.current.add(id);
+          }
           supabase.from('deposits').update({ status: 'cancelled' }).in('id', expiredDepositIds).then(undefined, () => {});
         }
 
         setTransactions([...vtuTransactions, ...deposits].sort((a, b) => b.timestamp - a.timestamp));
       }
+
       if (referralRes.status === 'fulfilled' && !referralRes.value.error) {
         const referralData = referralRes.value.data as { referralCommissionBalance?: number } | null;
         setReferralCommissionBalance(Number(referralData?.referralCommissionBalance || 0));
       }
     } catch {
       // Keep previous state on error
+    } finally {
+      refreshInFlightRef.current = false;
     }
   }, [user]);
 
-  // Refresh when user logs in/out
+  // Stable reference to refreshData for subscriptions
+  const refreshDataRef = useRef(refreshData);
   useEffect(() => {
+    refreshDataRef.current = refreshData;
+  }, [refreshData]);
+
+  // Preload data bundle plans, virtual accounts, and refresh on user login
+  useEffect(() => {
+    let isSubscribed = true;
     if (user) {
-      refreshData();
+      queueMicrotask(() => {
+        if (!isSubscribed) return;
+        void refreshData(true);
+        void loadVirtualAccounts();
+        void preloadDataPlans();
+      });
     } else {
       setMainBalance(0);
       setTransactions([]);
       setVirtualAccounts([]);
     }
-  }, [user, refreshData]);
+    return () => {
+      isSubscribed = false;
+    };
+  }, [user, refreshData, loadVirtualAccounts]);
 
-  // Realtime balance and transaction sync
+  // Realtime balance and transaction sync with AppState lifecycle management
+  // Teardown WebSockets when backgrounded to prevent background battery drain & crashes
   useEffect(() => {
     if (!user?.id) return;
-    const channel = supabase
-      .channel(`realtime-user-${user.id}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'wallets', filter: `user_id=eq.${user.id}` },
-        () => {
-          void refreshData();
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'vtu_transactions', filter: `user_id=eq.${user.id}` },
-        () => {
-          void refreshData();
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'deposits', filter: `user_id=eq.${user.id}` },
-        () => {
-          void refreshData();
-        }
-      )
-      .subscribe();
+
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const subscribeChannel = () => {
+      if (channel) return;
+      channel = supabase
+        .channel(`realtime-user-${user.id}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'wallets', filter: `user_id=eq.${user.id}` },
+          () => {
+            void refreshDataRef.current?.();
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'vtu_transactions', filter: `user_id=eq.${user.id}` },
+          () => {
+            void refreshDataRef.current?.();
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'deposits', filter: `user_id=eq.${user.id}` },
+          () => {
+            void refreshDataRef.current?.();
+          }
+        )
+        .subscribe();
+    };
+
+    const unsubscribeChannel = () => {
+      if (channel) {
+        void supabase.removeChannel(channel);
+        channel = null;
+      }
+    };
+
+    if (AppState.currentState === 'active') {
+      subscribeChannel();
+    }
+
+    const appStateSub = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      if (nextState === 'active') {
+        subscribeChannel();
+        void refreshDataRef.current?.(true);
+      } else {
+        unsubscribeChannel();
+      }
+    });
 
     return () => {
-      void supabase.removeChannel(channel);
+      appStateSub.remove();
+      unsubscribeChannel();
     };
-  }, [user?.id, refreshData]);
+  }, [user?.id]);
 
   const toggleBalanceMask = () => setIsBalanceMasked((prev) => !prev);
   const clearNotifications = () => setUnreadNotifications(0);

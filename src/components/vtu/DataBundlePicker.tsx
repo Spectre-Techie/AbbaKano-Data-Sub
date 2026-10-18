@@ -19,7 +19,7 @@ import { TelcoNetworkSelector } from '@/components/vtu/TelcoNetworkSelector';
 import { useTelcoDetector } from '@/hooks/useTelcoDetector';
 import { useCheckout } from '@/context/CheckoutContext';
 import { useApp } from '@/context/AppContext';
-import { DataPlan, fetchDataPlans } from '@/services/dataService';
+import { DataPlan, fetchDataPlans, getCachedPlans } from '@/services/dataService';
 import { ApiError } from '@/lib/api';
 
 interface DataBundlePickerProps {
@@ -99,8 +99,12 @@ export const DataBundlePicker: React.FC<DataBundlePickerProps> = ({
   const [dataType, setDataType] = useState<'GENERAL' | 'SME' | 'CORPORATE' | 'DIRECT'>('GENERAL');
   const [selectedPlanId, setSelectedPlanId] = useState<string>('mtn-sme-1gb');
   const [recipientNumber, setRecipientNumber] = useState('');
-  const [plans, setPlans] = useState<(DataPlan & { purchaseAvailable?: boolean })[]>([]);
-  const [plansLoading, setPlansLoading] = useState(true);
+  
+  const initialCached = getCachedPlans(selectedNetwork);
+  const [plans, setPlans] = useState<(DataPlan & { purchaseAvailable?: boolean })[]>(
+    initialCached ? initialCached.map((plan) => ({ ...plan, resellerDiscount: 0 })) : []
+  );
+  const [plansLoading, setPlansLoading] = useState(!initialCached || initialCached.length === 0);
   const [plansError, setPlansError] = useState<string | null>(null);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
@@ -136,12 +140,16 @@ export const DataBundlePicker: React.FC<DataBundlePickerProps> = ({
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.resolve().then(() => {
-      if (cancelled) return;
-      setPlansLoading(true);
-      setPlansError(null);
-      return fetchDataPlans(selectedNetwork);
-    })
+    const cached = getCachedPlans(selectedNetwork);
+    if (cached && cached.length > 0) {
+      setPlans(cached.map((plan) => ({ ...plan, resellerDiscount: 0 })));
+      setPlansLoading(false);
+      return;
+    }
+
+    setPlansLoading(true);
+    setPlansError(null);
+    fetchDataPlans(selectedNetwork)
       .then((response) => {
         if (cancelled || !response) return;
         setPlans(response.map((plan) => ({ ...plan, resellerDiscount: 0 })));
@@ -160,17 +168,7 @@ export const DataBundlePicker: React.FC<DataBundlePickerProps> = ({
 
   const category = dataType === 'CORPORATE' ? 'GIFTING' : dataType;
   const availablePlans = plans.filter((plan) => plan.planType.toUpperCase() === category);
-
-  // Auto-select first plan when available if none selected or selected not in current category
-  useEffect(() => {
-    if (availablePlans.length > 0) {
-      if (!selectedPlanId || !availablePlans.some((p) => p.id === selectedPlanId)) {
-        setSelectedPlanId(availablePlans[0].id);
-      }
-    }
-  }, [availablePlans, selectedPlanId]);
-
-  const activePlan = availablePlans.find((p) => p.id === selectedPlanId) || availablePlans[0];
+  const activePlan = (selectedPlanId && availablePlans.find((p) => p.id === selectedPlanId)) || availablePlans[0];
   const netConfig = TELCO_NETWORKS[selectedNetwork];
 
   const handleBuy = () => {

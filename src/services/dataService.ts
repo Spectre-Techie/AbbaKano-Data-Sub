@@ -94,7 +94,7 @@ export const fetchDataPlans = async (
         planToken: plan.selectionToken,
         purchaseAvailable: plan.purchaseAvailable !== false,
       })));
-      planCache.set(cacheKey, { plans, expiresAt: Date.now() + 30_000 });
+      planCache.set(cacheKey, { plans, expiresAt: Date.now() + 15 * 60 * 1000 });
       return plans;
     } finally {
       planRequests.delete(cacheKey);
@@ -108,3 +108,23 @@ export const fetchDataPlans = async (
     ? plans.filter((plan) => plan.planType.toUpperCase() === category)
     : plans;
 };
+
+export const getCachedPlans = (
+  network = 'MTN',
+  category?: 'GENERAL' | 'SME' | 'GIFTING' | 'DIRECT',
+): DataPlan[] | null => {
+  const cacheKey = network.toUpperCase();
+  const cached = planCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now() && cached.plans.length > 0) {
+    return category
+      ? cached.plans.filter((plan) => plan.planType.toUpperCase() === category)
+      : cached.plans;
+  }
+  return null;
+};
+
+export const preloadDataPlans = async (): Promise<void> => {
+  const networks = ['MTN', 'AIRTEL', 'GLO', '9MOBILE'];
+  await Promise.allSettled(networks.map((net) => fetchDataPlans(net)));
+};
+

@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Rounded, Spacing, Layout } from '@/constants/theme';
 import { useTheme } from '@/context/AppContext';
@@ -16,6 +17,9 @@ export const AppBottomNav: React.FC<AppBottomNavProps> = ({
   onTabChange,
 }) => {
   const T = useTheme();
+  const insets = useSafeAreaInsets();
+  // Ensure comfortable clearance above gesture pill or 3-button system navigation bar
+  const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 24 : 16);
 
   const iconColor = (tab: AppTabKey) =>
     activeTab === tab ? T.primary : T.onSurfaceMuted;
@@ -27,7 +31,12 @@ export const AppBottomNav: React.FC<AppBottomNavProps> = ({
     <View
       style={[
         styles.navContainer,
-        { backgroundColor: T.canvas, borderTopColor: T.border },
+        {
+          backgroundColor: T.canvas,
+          borderTopColor: T.border,
+          paddingBottom: bottomInset + 4,
+          minHeight: 60 + bottomInset,
+        },
       ]}
     >
       {/* Home Tab */}
@@ -93,7 +102,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingBottom: Platform.select({ ios: 24, default: 8 }),
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.two,
     borderTopWidth: 1,
@@ -101,7 +109,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-around',
     zIndex: 100,
-    height: Platform.select({ ios: 88, default: 68 }),
   },
   tabItem: {
     flex: 1,
