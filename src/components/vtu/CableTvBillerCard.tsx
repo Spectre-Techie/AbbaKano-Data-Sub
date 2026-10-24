@@ -6,6 +6,7 @@ import { FormInput } from '@/components/common/FormInput';
 import { Button } from '@/components/common/Button';
 import { useCheckout } from '@/context/CheckoutContext';
 import { useApp } from '@/context/AppContext';
+import { supabase, extractFunctionError } from '@/lib/supabase';
 import { api, ApiError } from '@/lib/api';
 import { SCREEN_ASSETS } from '@/../assets/screenAssets';
 
@@ -43,8 +44,9 @@ export const CableTvBillerCard: React.FC = () => {
     }
   }, [paymentSuccessCount]);
 
-  useEffect(() => {
-    if (smartcardNumber.length !== 10) {
+  React.useEffect(() => {
+    const rawCard = smartcardNumber.replace(/\D/g, '');
+    if (rawCard.length !== 10) {
       setVerifiedCustomer(null);
       setPackages([]);
       setSelectedPackageId('');
@@ -53,20 +55,62 @@ export const CableTvBillerCard: React.FC = () => {
     let cancelled = false;
     setLoading(true);
     setErrorMessage(null);
-    void api.post<{ customerName?: string; plans?: Array<{ name: string; price: number; code: string; selectionToken: string }> }>('/vtu/verify-cable', {
-      provider: selectedProvider.id,
-      smartcardNumber,
-    }).then((response) => {
-      if (cancelled) return;
-      setVerifiedCustomer(response.customerName || null);
-      const nextPackages = (response.plans || []).map((plan) => ({ id: plan.code, name: plan.name, price: Number(plan.price), planToken: plan.selectionToken }));
-      setPackages(nextPackages);
-      setSelectedPackageId(nextPackages[0]?.id || '');
-    }).catch((error) => {
-      if (!cancelled) setErrorMessage(error instanceof ApiError ? error.message : 'Could not verify this cable customer.');
-    }).finally(() => { if (!cancelled) setLoading(false); });
+
+    void (async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke<{
+          customerName?: string;
+          plans?: Array<{ name: string; price: number; code: string; selectionToken: string }>;
+          message?: string;
+        }>('cable-services', {
+          body: {
+            provider: selectedProvider.code,
+            smartcardNumber: rawCard,
+          },
+        });
+
+        if (cancelled) return;
+
+        if (error) {
+          const readable = await extractFunctionError(error, 'Could not verify cable customer.');
+          setVerifiedCustomer(null);
+          setPackages([]);
+          setSelectedPackageId('');
+          setErrorMessage(readable);
+          return;
+        }
+
+        if (data?.customerName) {
+          setVerifiedCustomer(data.customerName);
+          const nextPackages = (data.plans || []).map((plan) => ({
+            id: plan.code,
+            name: plan.name,
+            price: Number(plan.price),
+            planToken: plan.selectionToken,
+          }));
+          setPackages(nextPackages);
+          setSelectedPackageId(nextPackages[0]?.id || '');
+          setErrorMessage(null);
+        } else {
+          setVerifiedCustomer(null);
+          setPackages([]);
+          setSelectedPackageId('');
+          setErrorMessage(data?.message || 'Could not verify this cable customer.');
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setVerifiedCustomer(null);
+          setPackages([]);
+          setSelectedPackageId('');
+          setErrorMessage(err?.message || 'Error verifying cable account.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
     return () => { cancelled = true; };
-  }, [selectedProvider.id, smartcardNumber]);
+  }, [selectedProvider.code, smartcardNumber]);
 
   const activePackage = packages.find((p) => p.id === selectedPackageId) || packages[0];
 

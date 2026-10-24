@@ -7,7 +7,7 @@ import {
   MOCK_KYC_TIERS,
 } from '@/constants/mockData';
 import { getPalette, setActiveThemeMode, PaletteType } from '@/constants/theme';
-import { supabase } from '@/lib/supabase';
+import { supabase, extractFunctionError } from '@/lib/supabase';
 import { preloadDataPlans } from '@/services/dataService';
 import { useAuth, AuthUser } from './AuthContext';
 
@@ -21,6 +21,8 @@ interface AppContextType {
   isBalanceMasked: boolean;
   toggleBalanceMask: () => void;
   virtualAccounts: VirtualAccount[];
+  requiresNin: boolean;
+  generateVirtualAccountsWithNin: (nin: string) => Promise<{ success: boolean; accounts?: VirtualAccount[]; error?: string }>;
   transactions: TransactionRecord[];
   kycTiers: KycTierInfo[];
   refreshData: (force?: boolean) => Promise<void>;
@@ -99,6 +101,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isBalanceMasked, setIsBalanceMasked] = useState<boolean>(false);
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
   const [virtualAccounts, setVirtualAccounts] = useState<VirtualAccount[]>([]);
+  const [requiresNin, setRequiresNin] = useState<boolean>(false);
   const [kycTiers, setKycTiers] = useState<KycTierInfo[]>(MOCK_KYC_TIERS);
   const [unreadNotifications, setUnreadNotifications] = useState<number>(0);
 
@@ -174,10 +177,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         if (mapped.length > 0) {
           setVirtualAccounts(mapped);
+          setRequiresNin(false);
+          return;
         }
+      }
+
+      if (edgeData && (edgeData as any).requiresNin) {
+        setRequiresNin(true);
       }
     } catch (err) {
       console.warn('Failed to load virtual accounts:', err);
+    }
+  }, [user]);
+
+  const generateVirtualAccountsWithNin = useCallback(async (nin: string): Promise<{ success: boolean; accounts?: VirtualAccount[]; error?: string }> => {
+    if (!user?.id) return { success: false, error: 'User is not authenticated.' };
+    const cleanNin = nin.replace(/\D/g, '');
+    if (cleanNin.length !== 11) {
+      return { success: false, error: 'Please enter a valid 11-digit National Identity Number (NIN).' };
+    }
+
+    try {
+      const { data, error } = await supabase.functions.invoke('virtual-accounts', {
+        body: { nin: cleanNin },
+      });
+
+      if (error) {
+        const readable = await extractFunctionError(error, 'Could not generate virtual accounts. Please verify your NIN.');
+        return { success: false, error: readable };
+      }
+
+      const rawAccounts = (data as any)?.accounts;
+      if (Array.isArray(rawAccounts) && rawAccounts.length > 0) {
+        const userFullName = (user.fullName || user.name || 'Customer').trim();
+        const mapped: VirtualAccount[] = [];
+        for (const raw of rawAccounts) {
+          const bankName = String(raw.bankName || raw.bank_name || 'Bank').trim();
+          const accountNumber = String(raw.accountNumber || raw.account_number || '').trim();
+          if (!bankName || !accountNumber) continue;
+          const accountName = `AbbaKano - ${userFullName} (${bankName})`;
+          mapped.push({
+            bankName,
+            accountNumber,
+            accountName,
+            recommended: true,
+          });
+        }
+        if (mapped.length > 0) {
+          setVirtualAccounts(mapped);
+          setRequiresNin(false);
+          return { success: true, accounts: mapped };
+        }
+      }
+
+      const errMsg = (data as any)?.message || 'No virtual accounts were generated. Please check your NIN details.';
+      return { success: false, error: errMsg };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Failed to generate accounts with NIN.' };
     }
   }, [user]);
 
@@ -395,6 +451,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isBalanceMasked,
         toggleBalanceMask,
         virtualAccounts,
+        requiresNin,
+        generateVirtualAccountsWithNin,
         transactions,
         kycTiers,
         refreshData,

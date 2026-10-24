@@ -1,16 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { PaletteType, Rounded, Spacing } from '@/constants/theme';
 import { FormInput } from '@/components/common/FormInput';
 import { Button } from '@/components/common/Button';
 import { useCheckout } from '@/context/CheckoutContext';
 import { useApp } from '@/context/AppContext';
-import { api, ApiError } from '@/lib/api';
+import { supabase, extractFunctionError } from '@/lib/supabase';
 
 const ELECTRICITY_DISCOS = [
   { id: 'aedc', code: 'AEDC', name: 'Abuja Electricity' },
-  { id: 'ekedc', code: 'EKEDC', name: 'Eko Electricity' },
   { id: 'ikedc', code: 'IKEDC', name: 'Ikeja Electric' },
   { id: 'jed', code: 'JED', name: 'Jos Electricity' },
   { id: 'kedco', code: 'KEDCO', name: 'Kano Electricity' },
@@ -35,11 +34,13 @@ export const ElectricityBillerCard: React.FC = () => {
   const clearInputs = () => {
     setMeterNumber('');
     setVerifiedCustomer(null);
+    setPlanToken(null);
+    setErrorMessage(null);
     setAmount('5000');
   };
 
-  const prevCountRef = React.useRef(paymentSuccessCount);
-  React.useEffect(() => {
+  const prevCountRef = useRef(paymentSuccessCount);
+  useEffect(() => {
     if (paymentSuccessCount > prevCountRef.current) {
       prevCountRef.current = paymentSuccessCount;
       clearInputs();
@@ -47,44 +48,88 @@ export const ElectricityBillerCard: React.FC = () => {
   }, [paymentSuccessCount]);
 
   useEffect(() => {
-    if (meterNumber.length < 8) {
+    const rawMeter = meterNumber.replace(/\D/g, '');
+    if (rawMeter.length < 10) {
       setVerifiedCustomer(null);
       setPlanToken(null);
+      setErrorMessage(null);
       return;
     }
+
     let cancelled = false;
     setLoading(true);
     setErrorMessage(null);
-    const meterTypeQuery = meterType === 'POSTPAID' ? 'postpaid' : 'prepaid';
-    void Promise.all([
-      api.post<{ customerName?: string; customerAddress?: string }>('/vtu/verify-electricity', { provider: selectedDisCo.id, meterNumber }),
-      api.get<{ plans: Array<{ selectionToken?: string }> }>(`/vtu/service-plans?service=electricity&provider=${selectedDisCo.id}&meterType=${meterTypeQuery}`),
-    ]).then(([verification, plansResponse]) => {
-      if (cancelled) return;
-      setVerifiedCustomer(verification.customerName || verification.customerAddress || null);
-      setPlanToken(plansResponse.plans?.[0]?.selectionToken || null);
-    }).catch((error) => {
-      if (!cancelled) setErrorMessage(error instanceof ApiError ? error.message : 'Could not verify this meter.');
-    }).finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [meterNumber, meterType, selectedDisCo.id]);
+
+    void (async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke<{
+          customerName?: string;
+          selectionToken?: string;
+          message?: string;
+        }>('electricity-services', {
+          body: {
+            action: 'verify-meter',
+            provider: selectedDisCo.code,
+            meterNumber: rawMeter,
+          },
+        });
+
+        if (cancelled) return;
+
+        if (error) {
+          const readable = await extractFunctionError(error, 'Could not verify electricity meter.');
+          setVerifiedCustomer(null);
+          setPlanToken(null);
+          setErrorMessage(readable);
+          return;
+        }
+
+        if (data?.customerName) {
+          setVerifiedCustomer(data.customerName);
+          setPlanToken(data.selectionToken || null);
+          setErrorMessage(null);
+        } else {
+          setVerifiedCustomer(null);
+          setPlanToken(null);
+          setErrorMessage(data?.message || 'DisCo did not return customer details for this meter.');
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setVerifiedCustomer(null);
+          setPlanToken(null);
+          setErrorMessage(err?.message || 'Network error verifying electricity meter.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [meterNumber, selectedDisCo.code]);
 
   const presetAmounts = ['1000', '2000', '3000', '5000', '10000', '20000'];
 
   const handlePay = () => {
     const numAmount = parseInt(amount, 10);
+    const rawMeter = meterNumber.replace(/\D/g, '');
     if (isNaN(numAmount) || numAmount < 500) return;
-    if (meterNumber.length < 11) return;
+    if (rawMeter.length < 10) return;
+    if (!verifiedCustomer || !planToken) return;
 
     startCheckout({
       type: 'ELECTRICITY',
       title: `${selectedDisCo.name} ${meterType}`,
       serviceName: `${selectedDisCo.name} Electricity Token`,
-      recipient: meterNumber,
+      recipient: rawMeter,
       amount: numAmount,
-      fee: 100,
-      billerName: selectedDisCo.name,
-      planToken: planToken || undefined,
+      fee: 0,
+      billerName: selectedDisCo.code,
+      network: selectedDisCo.code as any,
+      meterNumber: rawMeter,
+      meterType: meterType.toLowerCase(),
+      planToken,
       units: `${(numAmount / 72.5).toFixed(1)} kWh`,
       onSuccess: clearInputs,
     });
@@ -146,16 +191,24 @@ export const ElectricityBillerCard: React.FC = () => {
       {/* Meter Number Input */}
       <FormInput
         label="Meter / Account Number"
-        placeholder="Enter meter or account number"
+        placeholder="Enter 10 to 14 digit meter number"
         value={meterNumber}
         onChangeText={setMeterNumber}
         keyboardType="numeric"
-        maxLength={11}
+        maxLength={14}
         leftIcon={<MaterialCommunityIcons name="counter" size={18} color={Palette.onSurfaceMuted} />}
       />
 
+      {/* Loading Verification State */}
+      {loading && (
+        <View style={styles.verifyingBox}>
+          <ActivityIndicator size="small" color={Palette.primary} />
+          <Text style={styles.verifyingText}>Verifying meter with {selectedDisCo.name}...</Text>
+        </View>
+      )}
+
       {/* Verified Customer Card preview */}
-      {verifiedCustomer && (
+      {verifiedCustomer && !loading && (
         <View style={styles.verifiedBox}>
           <Ionicons name="checkmark-circle" size={18} color={Palette.tertiary} />
           <View style={styles.verifiedInfo}>
@@ -164,7 +217,17 @@ export const ElectricityBillerCard: React.FC = () => {
           </View>
         </View>
       )}
-      {errorMessage && <Text style={styles.verifiedName}>{errorMessage}</Text>}
+
+      {/* Error Message Card */}
+      {errorMessage && !loading && (
+        <View style={styles.errorBox}>
+          <Ionicons name="alert-circle" size={18} color={Palette.error} />
+          <View style={styles.errorInfo}>
+            <Text style={styles.errorLabel}>Verification Failed</Text>
+            <Text style={styles.errorText}>{errorMessage}</Text>
+          </View>
+        </View>
+      )}
 
       {/* Amount Preset Chips */}
       <Text style={styles.sectionTitle}>RECHARGE AMOUNT (₦)</Text>
@@ -192,9 +255,15 @@ export const ElectricityBillerCard: React.FC = () => {
       </ScrollView>
 
       <Button
-        title={loading ? 'Verifying meter...' : `Purchase ₦${amount || '0'} Electricity Token`}
+        title={
+          loading
+            ? 'Verifying meter details...'
+            : verifiedCustomer
+            ? `Purchase ₦${parseInt(amount || '0', 10).toLocaleString()} Electricity Token`
+            : 'Enter Valid Meter to Continue'
+        }
         onPress={handlePay}
-        disabled={meterNumber.length < 8 || !amount || !planToken || loading}
+        disabled={meterNumber.replace(/\D/g, '').length < 10 || !amount || !verifiedCustomer || !planToken || loading}
         variant="primary"
         style={{ marginTop: Spacing.four }}
       />
@@ -275,6 +344,22 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
     color: Palette.primary,
     fontWeight: '800',
   },
+  verifyingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.twoAndHalf,
+    backgroundColor: 'rgba(77, 142, 255, 0.08)',
+    borderRadius: Rounded.md,
+    padding: Spacing.three,
+    marginBottom: Spacing.four,
+    borderWidth: 1,
+    borderColor: 'rgba(77, 142, 255, 0.2)',
+  },
+  verifyingText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Palette.primaryLight,
+  },
   verifiedBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -299,6 +384,32 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: Palette.tertiary,
+    marginTop: 2,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.twoAndHalf,
+    backgroundColor: 'rgba(255, 68, 68, 0.08)',
+    borderRadius: Rounded.md,
+    padding: Spacing.three,
+    marginBottom: Spacing.four,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 68, 68, 0.25)',
+  },
+  errorInfo: {
+    flex: 1,
+  },
+  errorLabel: {
+    fontSize: 10,
+    color: Palette.error,
+    textTransform: 'uppercase',
+    fontWeight: '700',
+  },
+  errorText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Palette.onSurface,
     marginTop: 2,
   },
   amountChipsRow: {
