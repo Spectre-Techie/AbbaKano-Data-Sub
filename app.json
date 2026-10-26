@@ -2,7 +2,7 @@
   "expo": {
     "name": "AbbaKano DataSub",
     "slug": "abbakano_data_sub_app",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "abbakanodatasubapp",
@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "com.abbakano.datasub",
-      "versionCode": 2,
+      "versionCode": 3,
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "USE_BIOMETRIC",

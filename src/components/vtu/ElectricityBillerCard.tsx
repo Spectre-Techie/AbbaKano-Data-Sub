@@ -229,8 +229,24 @@ export const ElectricityBillerCard: React.FC = () => {
         </View>
       )}
 
-      {/* Amount Preset Chips */}
-      <Text style={styles.sectionTitle}>RECHARGE AMOUNT (₦)</Text>
+      {/* Manual Amount Input */}
+      <FormInput
+        label="RECHARGE AMOUNT (₦)"
+        placeholder="Enter amount (min ₦500)"
+        value={amount}
+        onChangeText={(text) => {
+          setAmount(text.replace(/\D/g, ''));
+          if (errorMessage && errorMessage.includes('₦500')) setErrorMessage(null);
+        }}
+        keyboardType="numeric"
+        leftIcon={<MaterialCommunityIcons name="cash" size={18} color={Palette.onSurfaceMuted} />}
+        maxLength={7}
+      />
+
+      {/* Quick Amount Preset Chips */}
+      <Text style={[styles.sectionTitle, { marginTop: -Spacing.one, marginBottom: Spacing.two }]}>
+        QUICK PRESET AMOUNTS
+      </Text>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -259,11 +275,20 @@ export const ElectricityBillerCard: React.FC = () => {
           loading
             ? 'Verifying meter details...'
             : verifiedCustomer
-            ? `Purchase ₦${parseInt(amount || '0', 10).toLocaleString()} Electricity Token`
+            ? (amount && parseInt(amount, 10) >= 500
+                ? `Purchase ₦${parseInt(amount, 10).toLocaleString()} Electricity Token`
+                : 'Enter Recharge Amount (Min ₦500)')
             : 'Enter Valid Meter to Continue'
         }
         onPress={handlePay}
-        disabled={meterNumber.replace(/\D/g, '').length < 10 || !amount || !verifiedCustomer || !planToken || loading}
+        disabled={
+          meterNumber.replace(/\D/g, '').length < 10 ||
+          !amount ||
+          parseInt(amount, 10) < 500 ||
+          !verifiedCustomer ||
+          !planToken ||
+          loading
+        }
         variant="primary"
         style={{ marginTop: Spacing.four }}
       />

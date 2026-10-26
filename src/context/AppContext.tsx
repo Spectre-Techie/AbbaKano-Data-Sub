@@ -39,6 +39,24 @@ interface AppContextType {
   theme: PaletteType;
 }
 
+export function formatBeneficiaryAccountName(rawAccountName?: string, userFullName?: string): string {
+  const PREFIX = 'ABBA KANO INVESTMENTS LMITED- ';
+  const raw = (rawAccountName || '').trim();
+  if (raw) {
+    const namePart = raw
+      .replace(/^ABBA\s*KANO\s*INVESTMENTS?\s*(?:LIMITED|LMITED)?\s*[-–:]*\s*/i, '')
+      .replace(/^AbbaKano\s*[-–:]*\s*/i, '')
+      .replace(/\s*\([^)]*\)$/, '')
+      .trim();
+    const first = namePart.split(/\s+/)[0] || '';
+    if (first) {
+      return `${PREFIX}${first.toUpperCase()}`;
+    }
+  }
+  const fallbackFirst = (userFullName || 'CUSTOMER').trim().split(/\s+/)[0] || 'CUSTOMER';
+  return `${PREFIX}${fallbackFirst.toUpperCase()}`;
+}
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 function mapServerTx(tx: any): TransactionRecord {
@@ -165,8 +183,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const bankName = String(raw.bankName || raw.bank_name || 'Bank').trim();
           const accountNumber = String(raw.accountNumber || raw.account_number || '').trim();
           if (!bankName || !accountNumber) continue;
-          // Name for active user customized with the virtual bank name
-          const accountName = `AbbaKano - ${userFullName} (${bankName})`;
+          const accountName = formatBeneficiaryAccountName(raw.accountName || raw.account_name, userFullName);
           mapped.push({
             bankName,
             accountNumber,
@@ -215,7 +232,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const bankName = String(raw.bankName || raw.bank_name || 'Bank').trim();
           const accountNumber = String(raw.accountNumber || raw.account_number || '').trim();
           if (!bankName || !accountNumber) continue;
-          const accountName = `AbbaKano - ${userFullName} (${bankName})`;
+          const accountName = formatBeneficiaryAccountName(raw.accountName || raw.account_name, userFullName);
           mapped.push({
             bankName,
             accountNumber,

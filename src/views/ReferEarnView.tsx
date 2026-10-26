@@ -140,9 +140,6 @@ export const ReferEarnView: React.FC<ReferEarnViewProps> = ({ onBackPress }) => 
         <View style={[styles.statCard, styles.statCardHighlight]}>
           <View style={styles.statCardHeader}>
             <Text style={styles.statCardLabel}>Ready to Claim</Text>
-            <View style={styles.instantPayBadge}>
-              <Text style={styles.instantPayText}>Instant pay</Text>
-            </View>
           </View>
           <Text style={styles.statCardValueGreen}>₦{UNCLAIMED_BALANCE.toLocaleString()}</Text>
           <View style={styles.unclaimedRow}>
@@ -389,18 +386,6 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
   },
   statCardFooterText: {
     fontSize: 11,
-    color: Palette.tertiary,
-    fontFamily: Typography.family,
-  },
-  instantPayBadge: {
-    backgroundColor: 'rgba(0,208,132,0.12)',
-    borderRadius: Rounded.full,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  instantPayText: {
-    fontSize: 9,
-    fontWeight: '700',
     color: Palette.tertiary,
     fontFamily: Typography.family,
   },

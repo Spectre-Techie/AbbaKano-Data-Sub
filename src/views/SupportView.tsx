@@ -108,17 +108,6 @@ export const SupportView: React.FC<SupportViewProps> = ({ onBackPress }) => {
       >
         {/* === LIVE DESK STATUS CARD === */}
         <View style={styles.statusCard}>
-          <View style={styles.statusHeader}>
-            <View style={styles.statusDotRow}>
-              <View style={styles.liveDotPulse}>
-                <View style={styles.liveDot} />
-              </View>
-              <Text style={styles.statusBadgeText}>SUPPORT DESK ONLINE</Text>
-            </View>
-            <View style={styles.etaBadge}>
-              <Text style={styles.statusEta}>Avg. Response &lt; 2 mins</Text>
-            </View>
-          </View>
           <Text style={styles.statusTitle}>Need help with a transaction?</Text>
           <Text style={styles.statusSubtitle}>
             Our technical support specialists are standing by 24/7 to resolve data topups, airtime, cable TV, and wallet funding inquiries immediately.
@@ -375,49 +364,6 @@ const getStyles = (Palette: PaletteType) =>
       borderWidth: 1,
       borderColor: Palette.borderHigh,
       marginBottom: Spacing.four,
-    },
-    statusHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      marginBottom: Spacing.two,
-    },
-    statusDotRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    liveDotPulse: {
-      width: 14,
-      height: 14,
-      borderRadius: 7,
-      backgroundColor: "rgba(16, 185, 129, 0.2)",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    liveDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-      backgroundColor: Palette.tertiary,
-    },
-    statusBadgeText: {
-      fontSize: 11,
-      fontWeight: "800",
-      color: Palette.tertiary,
-      letterSpacing: 0.8,
-    },
-    etaBadge: {
-      backgroundColor: Palette.surfaceHigh,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: Rounded.full,
-    },
-    statusEta: {
-      fontSize: 10.5,
-      fontWeight: "600",
-      color: Palette.onSurfaceVariant,
-      fontFamily: Typography.family,
     },
     statusTitle: {
       fontSize: 16,

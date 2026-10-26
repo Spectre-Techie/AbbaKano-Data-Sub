@@ -117,7 +117,7 @@ export const VirtualAccountCard: React.FC = () => {
         <View style={styles.feeInfoRow}>
           <MaterialCommunityIcons name="lightning-bolt" size={13} color={Palette.tertiary} />
           <Text style={styles.feeInfoText} numberOfLines={1} ellipsizeMode="tail">
-            {activeAccount.feeInfo || 'Instant auto-credit in ~15–30 seconds via Monnify'}
+            {activeAccount.feeInfo || 'Credited in ~15–30 seconds via Monnify'}
           </Text>
         </View>
       </View>

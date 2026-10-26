@@ -172,10 +172,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       >
         <View style={styles.walletCardHeader}>
           <Text style={styles.walletLabel}>Wallet Balance</Text>
-          <View style={styles.instantBadge}>
-            <View style={styles.instantDot} />
-            <Text style={styles.instantText}>Instant Active</Text>
-          </View>
         </View>
 
         <View style={styles.balanceRow}>
@@ -403,29 +399,6 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
     color: Palette.onSurfaceVariant,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
-    fontFamily: Typography.family,
-  },
-  instantBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(0, 208, 132, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 208, 132, 0.3)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Rounded.full,
-  },
-  instantDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Palette.tertiary,
-  },
-  instantText: {
-    fontSize: 10,
-    color: Palette.tertiary,
-    fontWeight: '700',
     fontFamily: Typography.family,
   },
   balanceRow: {

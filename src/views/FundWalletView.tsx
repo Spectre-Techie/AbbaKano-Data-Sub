@@ -1,5 +1,5 @@
 import { PaletteType, Rounded, Spacing, Typography } from "@/constants/theme";
-import { useApp } from "@/context/AppContext";
+import { useApp, formatBeneficiaryAccountName } from "@/context/AppContext";
 import { MaterialIcons } from "@expo/vector-icons";
 import * as Clipboard from 'expo-clipboard';
 import React, { useMemo, useState } from "react";
@@ -158,8 +158,7 @@ export const FundWalletModal: React.FC<FundWalletModalProps> = ({
               {virtualAccounts.length > 0 ? (
                 virtualAccounts.map((account, idx) => {
                   const cleanAccountNumber = account.accountNumber.replace(/\s/g, '');
-                  const beneficiaryName =
-                    account.accountName || `AbbaKano - ${userDisplayName} (${account.bankName})`;
+                  const beneficiaryName = formatBeneficiaryAccountName(account.accountName, userDisplayName);
 
                   return (
                     <View
@@ -179,11 +178,6 @@ export const FundWalletModal: React.FC<FundWalletModalProps> = ({
                           <Text style={styles.bankName} numberOfLines={1}>
                             {account.bankName.toUpperCase()}
                           </Text>
-                        </View>
-
-                        <View style={styles.autoCreditBadge}>
-                          <View style={styles.autoCreditDot} />
-                          <Text style={styles.autoCreditText}>Auto-Credit</Text>
                         </View>
                       </View>
 
@@ -217,14 +211,30 @@ export const FundWalletModal: React.FC<FundWalletModalProps> = ({
                         </View>
                       </View>
 
-                      {/* Beneficiary Name Row */}
-                      <View style={styles.beneficiaryRow}>
-                        <Text style={styles.beneficiaryLabel} numberOfLines={1}>
-                          Beneficiary Name
-                        </Text>
-                        <Text style={styles.beneficiaryValue} numberOfLines={2}>
-                          {beneficiaryName}
-                        </Text>
+                      {/* Beneficiary Name Box */}
+                      <View style={styles.beneficiaryBox}>
+                        <Text style={styles.beneficiaryLabel}>Beneficiary Account Name</Text>
+                        <View style={styles.beneficiaryRow}>
+                          <Text style={styles.beneficiaryValue} numberOfLines={2} adjustsFontSizeToFit>
+                            {beneficiaryName}
+                          </Text>
+                          <Pressable
+                            style={({ pressed }) => [
+                              styles.copyBtnSmall,
+                              pressed && { opacity: 0.75 },
+                            ]}
+                            onPress={() => void handleCopy(beneficiaryName, 'Beneficiary Name')}
+                            accessibilityRole="button"
+                            accessibilityLabel="Copy beneficiary account name"
+                          >
+                            <MaterialIcons
+                              name="content-copy"
+                              size={13}
+                              color={Palette.primary}
+                            />
+                            <Text style={styles.copyBtnSmallText}>Copy</Text>
+                          </Pressable>
+                        </View>
                       </View>
                     </View>
                   );
@@ -489,27 +499,6 @@ const getStyles = (Palette: PaletteType) =>
       fontFamily: Typography.family,
       letterSpacing: 0.5,
     },
-    autoCreditBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 5,
-      backgroundColor: 'rgba(0, 208, 132, 0.12)',
-      borderRadius: Rounded.full,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-    },
-    autoCreditDot: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: Palette.tertiary,
-    },
-    autoCreditText: {
-      fontSize: 10,
-      fontWeight: '700',
-      color: Palette.tertiary,
-      fontFamily: Typography.family,
-    },
     accountNumberBox: {
       backgroundColor: Palette.surface,
       borderRadius: Rounded.lg,
@@ -557,22 +546,51 @@ const getStyles = (Palette: PaletteType) =>
       color: Palette.primary,
       fontFamily: Typography.family,
     },
+    beneficiaryBox: {
+      backgroundColor: Palette.surface,
+      borderRadius: Rounded.lg,
+      padding: Spacing.three,
+      gap: 4,
+      borderWidth: 1,
+      borderColor: Palette.border,
+    },
     beneficiaryRow: {
-      paddingHorizontal: 4,
-      gap: 2,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 8,
     },
     beneficiaryLabel: {
       fontSize: 10,
+      fontWeight: '700',
       color: Palette.onSurfaceMuted,
-      fontFamily: Typography.family,
-      fontWeight: '600',
       textTransform: 'uppercase',
-      letterSpacing: 0.5,
+      letterSpacing: 0.6,
+      fontFamily: Typography.family,
     },
     beneficiaryValue: {
       fontSize: 13,
+      fontWeight: '800',
+      color: Palette.onSurface,
+      fontFamily: Typography.family,
+      flex: 1,
+      letterSpacing: 0.4,
+    },
+    copyBtnSmall: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: Palette.surfaceHigh,
+      borderRadius: Rounded.md,
+      paddingHorizontal: Spacing.twoAndHalf,
+      paddingVertical: 5,
+      borderWidth: 1,
+      borderColor: Palette.border,
+    },
+    copyBtnSmallText: {
+      fontSize: 11,
       fontWeight: '700',
-      color: Palette.onSurfaceVariant,
+      color: Palette.primary,
       fontFamily: Typography.family,
     },
     loadingContainer: {

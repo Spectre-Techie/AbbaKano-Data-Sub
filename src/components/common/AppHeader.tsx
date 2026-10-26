@@ -171,7 +171,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 {initials}
               </Text>
             </View>
-            <View style={[styles.onlineDot, { backgroundColor: T.tertiary, borderColor: T.canvas }]} />
           </Pressable>
         </View>
       </View>
@@ -288,14 +287,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: '#FFFFFF',
-  },
-  onlineDot: {
-    position: 'absolute',
-    bottom: 1,
-    right: 1,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 2,
   },
 });
