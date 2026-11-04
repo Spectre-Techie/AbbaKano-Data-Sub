@@ -175,7 +175,7 @@ const PrivacyPolicyContent = ({ T }: { T: any }) => (
     <View style={[styles.noticeCard, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
       <Text style={[styles.noticeTitle, { color: T.onSurface }]}>Summary for Users</Text>
       <Text style={[styles.noticeBody, { color: T.onSurfaceVariant }]}>
-        AbbaKano Data Sub ("we", "our", or "us") respects your fundamental right to privacy. We collect only
+        AbbaKano Data Sub (&ldquo;we&rdquo;, &ldquo;our&rdquo;, or &ldquo;us&rdquo;) respects your fundamental right to privacy. We collect only
         the data necessary to authenticate your wallet, deliver your telecommunications & utility services
         instantly, and satisfy financial regulations under the Nigeria Data Protection Act (NDPA 2023).
       </Text>

@@ -1,5 +1,6 @@
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
+import { supabase, extractFunctionError } from '@/lib/supabase';
 
 const LOGIN_CREDENTIALS_KEY = 'abbakano.biometric.login';
 const TRANSACTION_PIN_KEY = 'abbakano.biometric.transaction-pin';
@@ -96,7 +97,6 @@ export async function setBiometricsEnabled(enabled: boolean): Promise<void> {
   await SecureStore.setItemAsync(BIOMETRICS_ENABLED_KEY, enabled ? 'true' : 'false');
 }
 
-import { supabase, extractFunctionError } from '@/lib/supabase';
 
 export async function checkUserHasPin(): Promise<boolean> {
   const localPin = await getBiometricTransactionPin();

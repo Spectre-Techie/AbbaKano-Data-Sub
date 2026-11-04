@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Alert, Linking, View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { Alert, View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Rounded, Spacing, Typography } from '@/constants/theme';
 import { useApp, useTheme } from '@/context/AppContext';
@@ -33,7 +33,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onNavigateToPinSetup,
   onSignOut,
 }) => {
-  const { user, mainBalance, themePreference, effectiveTheme, virtualAccounts, requiresNin } = useApp();
+  const { user, mainBalance, themePreference, effectiveTheme } = useApp();
   const { deleteAccount } = useAuth();
   const T = useTheme();
   const [showThemeModal, setShowThemeModal] = useState(false);
