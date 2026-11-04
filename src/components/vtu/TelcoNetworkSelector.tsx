@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { Image } from 'expo-image';
 import { TELCO_LIST, TelcoNetworkId } from '@/constants/telco';
 import { PaletteType, Rounded, Spacing } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';

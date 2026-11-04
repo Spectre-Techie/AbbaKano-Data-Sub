@@ -37,6 +37,17 @@ export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
 
 function isTechnicalError(msg: string): boolean {
   const lower = msg.toLowerCase();
+  if (
+    lower.includes('already') ||
+    lower.includes('exist') ||
+    lower.includes('registered') ||
+    lower.includes('duplicate') ||
+    lower.includes('taken') ||
+    lower.includes('invalid') ||
+    lower.includes('incorrect')
+  ) {
+    return false;
+  }
   return (
     lower.includes('module not found') ||
     lower.includes('esm.sh') ||

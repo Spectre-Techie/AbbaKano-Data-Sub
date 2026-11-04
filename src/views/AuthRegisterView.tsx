@@ -8,9 +8,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Image,
   Alert,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import { PaletteType, Rounded, Spacing, Typography } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
@@ -77,8 +77,8 @@ export const AuthRegisterView: React.FC<AuthRegisterViewProps> = ({
       setErrorMessage('Please enter a password.');
       return;
     }
-    if (password.length < 6) {
-      setErrorMessage('Password must be at least 6 characters.');
+    if (password.length < 8) {
+      setErrorMessage('Password must be at least 8 characters.');
       return;
     }
     if (password !== confirmPassword) {
@@ -120,7 +120,21 @@ export const AuthRegisterView: React.FC<AuthRegisterViewProps> = ({
       setTermsAccepted(false);
       onRegisterSuccess();
     } catch (err) {
-      setErrorMessage(err instanceof ApiError ? err.message : 'Registration failed. Please try again.');
+      const rawMsg = err instanceof Error ? err.message : (err instanceof ApiError ? err.message : '');
+      const lower = rawMsg.toLowerCase();
+      if (lower.includes('phone') && (lower.includes('already exists') || lower.includes('already registered') || lower.includes('taken'))) {
+        setErrorMessage(`An account with phone number ${phone} is already registered. Please sign in instead.`);
+      } else if (lower.includes('email') && (lower.includes('already') || lower.includes('registered') || lower.includes('taken'))) {
+        setErrorMessage(`An account with email ${email} is already registered. Please sign in instead.`);
+      } else if (lower.includes('user already registered') || lower.includes('user with this email')) {
+        setErrorMessage('This email or phone number is already registered. Please sign in instead.');
+      } else if (lower.includes('referral') && (lower.includes('not found') || lower.includes('invalid'))) {
+        setErrorMessage('The referral phone number was not found. Please clear or correct the referral field.');
+      } else if (rawMsg) {
+        setErrorMessage(rawMsg);
+      } else {
+        setErrorMessage('Registration could not be completed. Please check your network and try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -136,6 +150,8 @@ export const AuthRegisterView: React.FC<AuthRegisterViewProps> = ({
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets={true}
+        keyboardDismissMode="on-drag"
       >
         {/* Header */}
         <View style={styles.header}>
@@ -144,7 +160,7 @@ export const AuthRegisterView: React.FC<AuthRegisterViewProps> = ({
               <Image
                 source={SCREEN_ASSETS.logoEmblem}
                 style={styles.brandEmblemImage}
-                resizeMode="cover"
+                contentFit="cover"
               />
             </View>
             <View>
@@ -163,7 +179,18 @@ export const AuthRegisterView: React.FC<AuthRegisterViewProps> = ({
           {errorMessage && (
             <View style={styles.errorBanner}>
               <MaterialIcons name="error-outline" size={18} color="#EF4444" />
-              <Text style={styles.errorBannerText}>{errorMessage}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.errorBannerText}>{errorMessage}</Text>
+                {(errorMessage.toLowerCase().includes('already registered') || errorMessage.toLowerCase().includes('already exists') || errorMessage.toLowerCase().includes('sign in instead')) && (
+                  <Pressable
+                    style={styles.errorBannerActionBtn}
+                    onPress={onLoginPress}
+                  >
+                    <Text style={styles.errorBannerActionText}>Sign In to Your Account</Text>
+                    <MaterialIcons name="arrow-forward" size={14} color="#FFFFFF" />
+                  </Pressable>
+                )}
+              </View>
             </View>
           )}
 
@@ -252,7 +279,37 @@ export const AuthRegisterView: React.FC<AuthRegisterViewProps> = ({
 
           {/* Password */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Password</Text>
+            <View style={styles.labelWithBadgeRow}>
+              <Text style={styles.inputLabel}>Password</Text>
+              {password.length > 0 && (
+                <View
+                  style={[
+                    styles.matchBadge,
+                    {
+                      backgroundColor: password.length >= 8
+                        ? 'rgba(16, 185, 129, 0.12)'
+                        : 'rgba(234, 179, 8, 0.12)',
+                    },
+                  ]}
+                >
+                  <MaterialIcons
+                    name={password.length >= 8 ? 'check-circle' : 'info'}
+                    size={12}
+                    color={password.length >= 8 ? '#10B981' : '#EAB308'}
+                  />
+                  <Text
+                    style={[
+                      styles.matchBadgeText,
+                      { color: password.length >= 8 ? '#10B981' : '#EAB308' },
+                    ]}
+                  >
+                    {password.length >= 8
+                      ? '8+ characters (Strong)'
+                      : `${8 - password.length} more char${8 - password.length === 1 ? '' : 's'} needed`}
+                  </Text>
+                </View>
+              )}
+            </View>
             <View style={styles.inputBox}>
               <MaterialIcons name="lock-outline" size={20} color={Palette.onSurfaceMuted} />
               <TextInput
@@ -262,7 +319,7 @@ export const AuthRegisterView: React.FC<AuthRegisterViewProps> = ({
                   setPassword(t);
                   if (errorMessage) setErrorMessage(null);
                 }}
-                placeholder="Enter password"
+                placeholder="At least 8 characters"
                 placeholderTextColor={Palette.onSurfaceMuted}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
@@ -456,7 +513,7 @@ export const AuthRegisterView: React.FC<AuthRegisterViewProps> = ({
           <Pressable
             style={({ pressed }) => [
               styles.registerBtn,
-              (!termsAccepted || !fullName || !phone || !password || password.length < 6 || !passwordsMatch || !pin || !confirmPin) && styles.registerBtnDisabled,
+              (!termsAccepted || !fullName || !phone || !password || password.length < 8 || !passwordsMatch || !pin || !confirmPin) && styles.registerBtnDisabled,
               pressed && termsAccepted && { opacity: 0.88 },
             ]}
             onPress={handleRegister}
@@ -493,7 +550,7 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
   content: {
     paddingHorizontal: Spacing.five,
     paddingTop: Spacing.six,
-    paddingBottom: Spacing.eight,
+    paddingBottom: 160,
     gap: Spacing.five,
   },
 
@@ -564,6 +621,23 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
     color: '#EF4444',
     fontFamily: Typography.family,
     flex: 1,
+  },
+  errorBannerActionBtn: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Palette.primary,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: Rounded.sm,
+    alignSelf: 'flex-start',
+  },
+  errorBannerActionText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: Typography.family,
   },
   inputGroup: { gap: 4 },
   inputLabel: {

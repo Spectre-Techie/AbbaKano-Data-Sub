@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import * as Linking from 'expo-linking';
-import { supabase } from '@/lib/supabase';
+import { supabase, extractFunctionError } from '@/lib/supabase';
 import {
   authenticateBiometric,
   getBiometricLogin,
@@ -143,7 +143,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
     void Linking.getInitialURL().then(applyRecoveryUrl);
-    const urlSubscription = Linking.addEventListener('url', ({ url }) => {
+    const urlSubscription = Linking.addEventListener('url', ({ url }: { url: string }) => {
       void applyRecoveryUrl(url);
     });
     const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
@@ -159,11 +159,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = useCallback(async (identifier: string, password: string) => {
     const normalizedIdentifier = identifier.trim();
-    const credentials = normalizedIdentifier.includes('@')
-      ? { email: normalizedIdentifier.toLowerCase(), password }
-      : { phone: normalizePhone(normalizedIdentifier), password };
+    let credentials: { email: string; password: string } | { phone: string; password: string };
+    try {
+      credentials = normalizedIdentifier.includes('@')
+        ? { email: normalizedIdentifier.toLowerCase(), password }
+        : { phone: normalizePhone(normalizedIdentifier), password };
+    } catch {
+      throw new Error('Please enter a valid Nigerian phone number (e.g. 08012345678) or email address.');
+    }
     const { data, error } = await supabase.auth.signInWithPassword(credentials);
-    if (error || !data.user) throw error || new Error('Sign in failed.');
+    if (error || !data.user) {
+      const msg = (error?.message || '').toLowerCase();
+      if (msg.includes('network') || msg.includes('fetch') || msg.includes('timeout') || msg.includes('failed to fetch')) {
+        throw new Error('Network connection error. Please check your internet connection and try again.');
+      }
+      throw new Error('Incorrect email/phone number or password. Please verify your login details and try again.');
+    }
     await saveBiometricLogin(normalizedIdentifier, password);
     setUser(mapUser(data.user));
   }, []);
@@ -186,7 +197,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const register = useCallback(async (payload: RegisterPayload) => {
     const email = payload.email?.trim().toLowerCase();
-    if (!email) throw new Error('Email address is required to create a Supabase account.');
+    if (!email) throw new Error('Email address is required to create an account.');
 
     const { error: registrationError } = await supabase.functions.invoke('register-user', {
       body: {
@@ -198,7 +209,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         referralCode: payload.referralCode,
       },
     });
-    if (registrationError) throw registrationError;
+    if (registrationError) {
+      const extracted = await extractFunctionError(registrationError, 'Registration failed. Please check your details and try again.');
+      throw new Error(extracted);
+    }
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email,

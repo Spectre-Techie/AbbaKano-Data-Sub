@@ -6,14 +6,16 @@ import {
   ScrollView,
   Pressable,
   Linking,
-  Image,
+
 } from 'react-native';
+import { Image } from 'expo-image';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { PaletteType, Rounded, Spacing, Typography } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
 import { ThemeSwitchModal } from '@/components/common/ThemeSwitchModal';
 import { SCREEN_ASSETS } from '../../assets/screenAssets';
+import { AppUpdateBanner } from '@/components/common/AppUpdateBanner';
 
 interface DashboardViewProps {
   onNavigateTab: (tab: 'home' | 'vtu' | 'ledger' | 'account') => void;
@@ -106,7 +108,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <Image
               source={SCREEN_ASSETS.logoEmblem}
               style={styles.brandLogo}
-              resizeMode="contain"
+              contentFit="contain"
             />
           </View>
           <View style={styles.welcomeInfo}>
@@ -155,6 +157,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </Pressable>
         </View>
       </View>
+
+      {/* App Update Alert Banner */}
+      <AppUpdateBanner />
 
       {/* === MASTER WALLET CARD === */}
       <LinearGradient

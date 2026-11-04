@@ -16,6 +16,7 @@ import {
   checkUserHasPin,
 } from '@/services/biometricService';
 import { useAuth } from '@/context/AuthContext';
+import { checkForAppUpdates, openAppStore, CURRENT_APP_VERSION, CURRENT_VERSION_CODE } from '@/services/appUpdateService';
 
 interface ProfileViewProps {
   onNavigateToReferEarn?: () => void;
@@ -32,7 +33,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onNavigateToPinSetup,
   onSignOut,
 }) => {
-  const { user, mainBalance, themePreference, effectiveTheme } = useApp();
+  const { user, mainBalance, themePreference, effectiveTheme, virtualAccounts, requiresNin } = useApp();
   const { deleteAccount } = useAuth();
   const T = useTheme();
   const [showThemeModal, setShowThemeModal] = useState(false);
@@ -83,6 +84,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       hasToggle: false,
     },
     { id: 'support', icon: 'support-agent', title: 'Contact Support', subtitle: '24/7 WhatsApp & in-app chat', section: 'Help & Support' },
+    { id: 'app_update', icon: 'system-update', title: 'Check for Updates', subtitle: `Current Version ${CURRENT_APP_VERSION} (Build ${CURRENT_VERSION_CODE})`, badge: `v${CURRENT_APP_VERSION}`, section: 'Help & Support' },
     { id: 'privacy', icon: 'privacy-tip', title: 'Privacy Policy', subtitle: 'How your personal information is handled', section: 'Help & Support' },
     { id: 'terms', icon: 'description', title: 'Terms and Conditions', subtitle: 'The terms for using AbbaKano', section: 'Help & Support' },
     { id: 'delete_account', icon: 'delete-outline', title: 'Delete Account', subtitle: 'Permanently delete your AbbaKano account', section: 'Account Actions', danger: true },
@@ -123,6 +125,26 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     else if (id === 'change_pin') onNavigateToPinSetup?.(hasPin);
     else if (id === 'support') {
       if (onNavigateToSupport) onNavigateToSupport();
+    }
+    else if (id === 'app_update') {
+      void (async () => {
+        const info = await checkForAppUpdates();
+        if (info.updateAvailable) {
+          Alert.alert(
+            'Update Available!',
+            `Version ${info.latestVersion} is now available on Google Play with new fixes and enhancements. Would you like to update now?`,
+            [
+              { text: 'Later', style: 'cancel' },
+              { text: 'Update on Google Play', onPress: () => void openAppStore() },
+            ]
+          );
+        } else {
+          Alert.alert(
+            'Up to Date!',
+            `You are using the latest version of AbbaKano DataSub (v${CURRENT_APP_VERSION}, Build ${CURRENT_VERSION_CODE}).`
+          );
+        }
+      })();
     }
     else if (id === 'privacy') {
       setLegalTab('privacy');
@@ -205,8 +227,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   {(user.name || user.fullName || 'User').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                 </Text>
               </View>
-              <View style={[styles.onlineRing, { backgroundColor: T.tertiary, borderColor: T.surfaceLow }]} />
-            </View>
+              </View>
 
             <View style={styles.profileInfo}>
               <View style={styles.nameRow}>
@@ -347,7 +368,7 @@ const styles = StyleSheet.create({
   avatarInitials: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', fontFamily: Typography.family },
   onlineRing: { position: 'absolute', bottom: 2, right: 2, width: 14, height: 14, borderRadius: 7, borderWidth: 2 },
   profileInfo: { flex: 1, gap: 4 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   profileName: { fontSize: 18, fontWeight: '700', fontFamily: Typography.family },
   tierBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(238,152,0,0.12)', borderRadius: Rounded.full, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start' },
   tierBadgeText: { fontSize: 11, fontWeight: '700', fontFamily: Typography.family },

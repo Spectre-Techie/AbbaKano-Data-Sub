@@ -8,10 +8,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Image,
   Linking,
   Alert,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { PaletteType, Rounded, Spacing, Typography } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
@@ -52,8 +52,20 @@ export const AuthLoginView: React.FC<AuthLoginViewProps> = ({
       setIdentifier('');
       setPassword('');
       onLoginSuccess();
-    } catch (err) {
-      setErrorMessage(err instanceof ApiError ? err.message : 'Sign in failed. Please try again.');
+    } catch (err: any) {
+      const msg = typeof err?.message === 'string' ? err.message : (err instanceof ApiError ? err.message : '');
+      const lower = msg.toLowerCase();
+      if (
+        lower.includes('invalid login credentials') ||
+        lower.includes('invalid_grant') ||
+        lower.includes('email not confirmed')
+      ) {
+        setErrorMessage('Incorrect email/phone number or password. Please verify your login details and try again.');
+      } else if (msg) {
+        setErrorMessage(msg);
+      } else {
+        setErrorMessage('Incorrect email/phone number or password. Please verify your login details and try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -100,7 +112,7 @@ export const AuthLoginView: React.FC<AuthLoginViewProps> = ({
             <Image
               source={SCREEN_ASSETS.logoEmblem}
               style={styles.logoImage}
-              resizeMode="cover"
+              contentFit="cover"
             />
           </View>
           <Text style={styles.headerTitle}>Sign In</Text>

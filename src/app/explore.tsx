@@ -5,10 +5,11 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Image,
+
   Dimensions,
   Modal,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Palette, Rounded, Spacing, Typography } from '@/constants/theme';
@@ -152,7 +153,7 @@ export default function ExploreScreen() {
       {/* Top App Bar */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Image source={SCREEN_ASSETS.logoEmblem} style={styles.brandEmblem} resizeMode="contain" />
+          <Image source={SCREEN_ASSETS.logoEmblem} style={styles.brandEmblem} contentFit="contain" />
           <View>
             <Text style={styles.headerSubtitle}>STITCH BLUEPRINT</Text>
             <Text style={styles.headerTitle}>All 53 Screens Blueprint</Text>
@@ -196,7 +197,7 @@ export default function ExploreScreen() {
             ].map((item) => (
               <View key={item.label} style={styles.logoBadgeBox}>
                 <View style={styles.ribbonLogoCircle}>
-                  <Image source={item.logo} style={styles.ribbonLogo} resizeMode="contain" />
+                  <Image source={item.logo} style={styles.ribbonLogo} contentFit="contain" />
                 </View>
                 <Text style={styles.logoBadgeLabel}>{item.label}</Text>
               </View>
@@ -250,7 +251,7 @@ export default function ExploreScreen() {
                   <Image
                     source={currentAsset}
                     style={styles.thumbnailImage}
-                    resizeMode="cover"
+                    contentFit="cover"
                   />
                   <View style={styles.zoomBadge}>
                     <MaterialIcons name="zoom-in" size={16} color="#FFFFFF" />
@@ -307,7 +308,7 @@ export default function ExploreScreen() {
               <Image
                 source={previewItem.asset}
                 style={styles.modalImage}
-                resizeMode="contain"
+                contentFit="contain"
               />
             </View>
           </View>

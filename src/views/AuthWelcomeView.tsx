@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Rounded, Spacing, Typography } from '@/constants/theme';
 import { SCREEN_ASSETS } from '../../assets/screenAssets';
@@ -68,7 +69,7 @@ export const AuthWelcomeView: React.FC<AuthWelcomeViewProps> = ({
           <Image
             source={SCREEN_ASSETS.logoEmblem}
             style={styles.brandEmblem}
-            resizeMode="cover"
+            contentFit="cover"
           />
         </View>
 
@@ -115,7 +116,7 @@ export const AuthWelcomeView: React.FC<AuthWelcomeViewProps> = ({
                 <Image
                   source={net.logo}
                   style={styles.carrierLogo}
-                  resizeMode="contain"
+                  contentFit="contain"
                 />
               </View>
               <Text style={[styles.networkCardName, { color: T.onSurface }]}>

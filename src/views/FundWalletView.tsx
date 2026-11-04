@@ -374,7 +374,10 @@ const getStyles = (Palette: PaletteType) =>
     },
     keyboardAvoid: {
       width: '100%',
-      maxWidth: 420,
+      maxWidth: 440,
+      height: '82%',
+      maxHeight: 640,
+      justifyContent: 'center',
       alignItems: 'center',
     },
     backdropPressable: {
@@ -386,8 +389,7 @@ const getStyles = (Palette: PaletteType) =>
     },
     modalCard: {
       width: '100%',
-      maxWidth: 420,
-      maxHeight: '85%',
+      height: '100%',
       backgroundColor: Palette.surface,
       borderRadius: Rounded.xxl,
       borderWidth: 1,
@@ -462,7 +464,7 @@ const getStyles = (Palette: PaletteType) =>
     },
     scrollContent: {
       gap: Spacing.three,
-      paddingBottom: Spacing.two,
+      paddingBottom: Spacing.six,
     },
     accountCard: {
       backgroundColor: Palette.surfaceLow,
