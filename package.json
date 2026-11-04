@@ -49,7 +49,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "postinstall": "node ./scripts/ensure-fonts.js"
+    "postinstall": "node -e \"if (require('fs').existsSync('./scripts/ensure-fonts.js')) require('./scripts/ensure-fonts.js');\""
   },
   "private": true
 }
