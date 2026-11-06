@@ -135,6 +135,7 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         reference?: string;
         status?: string;
         token?: string;
+        units?: string;
         message?: string;
         balance_kobo?: number;
       }>(functionName, { body });
@@ -173,7 +174,9 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         recipient: draft.recipient,
         billerName: draft.billerName,
         token: result.token,
-        units: draft.units,
+        units: result.units
+          ? (result.units.toLowerCase().includes('kwh') ? result.units : `${result.units} kWh`)
+          : draft.units,
       };
 
       setActiveReceipt(newTx);

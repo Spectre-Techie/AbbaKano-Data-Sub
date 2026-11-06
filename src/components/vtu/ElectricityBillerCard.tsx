@@ -130,7 +130,6 @@ export const ElectricityBillerCard: React.FC = () => {
       meterNumber: rawMeter,
       meterType: meterType.toLowerCase(),
       planToken,
-      units: `${(numAmount / 72.5).toFixed(1)} kWh`,
       onSuccess: clearInputs,
     });
   };
