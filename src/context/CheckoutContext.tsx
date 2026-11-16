@@ -134,12 +134,8 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (draft.type === 'CABLE_TV' && draft.billerName) body.provider = draft.billerName;
       if (draft.type === 'ELECTRICITY' && draft.network) body.provider = draft.network;
       if (draft.type === 'EDUCATION') {
-        body.examBody = draft.network?.toUpperCase();
-        body.planCode = draft.planId;
-        body.candidatePhone = draft.recipient;
+        body.selectionToken = draft.planToken;
         body.quantity = draft.metadata?.quantity || 1;
-        if (draft.metadata?.candidateName) body.candidateName = draft.metadata.candidateName;
-        if (draft.metadata?.profileCode) body.profileCode = draft.metadata.profileCode;
       }
 
       const { data: result, error } = await supabase.functions.invoke<{
@@ -149,6 +145,7 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         units?: string;
         message?: string;
         balance_kobo?: number;
+        pins?: unknown;
         voucher?: any;
       }>(functionName, { body });
 
@@ -170,8 +167,21 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       };
 
       const isSuccess = (result.status || 'success').toLowerCase() === 'success';
-      const token = result.token || (result as any).voucher?.pin;
-      const serialNumber = (result as any).voucher?.serialNumber;
+      let token = result.token || (result as any).voucher?.pin;
+      let serialNumber = (result as any).voucher?.serialNumber;
+      if (result.pins) {
+        if (typeof result.pins === 'string') {
+          token = result.pins;
+        } else if (Array.isArray(result.pins) && result.pins.length > 0) {
+          const first = result.pins[0];
+          if (typeof first === 'string') {
+            token = first;
+          } else if (first && typeof first === 'object') {
+            token = String((first as any).pin || (first as any).pin_number || (first as any).pin_code || '');
+            serialNumber = String((first as any).serial || (first as any).serial_number || '');
+          }
+        }
+      }
 
       const newTx: TransactionRecord = {
         id: result.reference || (result as any).voucher?.reference || `tx-${Date.now()}`,

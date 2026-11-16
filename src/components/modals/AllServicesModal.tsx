@@ -177,7 +177,7 @@ export const AllServicesModal: React.FC<AllServicesModalProps> = ({
               <View style={styles.sectionHeader}>
                 <MaterialIcons name="school" size={16} color="#0D9488" />
                 <Text style={[styles.sectionTitle, { color: '#0D9488' }]}>
-                  Education & Examination e-PINs
+                  Education
                 </Text>
               </View>
 
@@ -193,28 +193,9 @@ export const AllServicesModal: React.FC<AllServicesModalProps> = ({
                     <Image source={waecLogo} style={styles.logoImage} resizeMode="contain" />
                   </View>
                   <View style={styles.itemTextCol}>
-                    <Text style={[styles.itemTitle, { color: Palette.onSurface }]}>WAEC Result Checker</Text>
+                    <Text style={[styles.itemTitle, { color: Palette.onSurface }]}>WAEC</Text>
                     <Text style={[styles.itemDesc, { color: Palette.onSurfaceMuted }]}>
-                      Official PIN & Serial for WASSCE results
-                    </Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={20} color={Palette.onSurfaceMuted} />
-                </Pressable>
-
-                <Pressable
-                  style={[
-                    styles.serviceItem,
-                    { backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderColor: Palette.border },
-                  ]}
-                  onPress={() => handleSelect('education', { examBody: 'JAMB' })}
-                >
-                  <View style={[styles.logoBox, { backgroundColor: '#FFFFFF' }]}>
-                    <Image source={jambLogo} style={styles.logoImage} resizeMode="contain" />
-                  </View>
-                  <View style={styles.itemTextCol}>
-                    <Text style={[styles.itemTitle, { color: Palette.onSurface }]}>JAMB e-PIN</Text>
-                    <Text style={[styles.itemDesc, { color: Palette.onSurfaceMuted }]}>
-                      UTME, Mock & Direct Entry profile codes
+                      Result Checker PIN
                     </Text>
                   </View>
                   <MaterialIcons name="chevron-right" size={20} color={Palette.onSurfaceMuted} />
@@ -231,9 +212,9 @@ export const AllServicesModal: React.FC<AllServicesModalProps> = ({
                     <Image source={necoLogo} style={styles.logoImage} resizeMode="contain" />
                   </View>
                   <View style={styles.itemTextCol}>
-                    <Text style={[styles.itemTitle, { color: Palette.onSurface }]}>NECO Result Token</Text>
+                    <Text style={[styles.itemTitle, { color: Palette.onSurface }]}>NECO</Text>
                     <Text style={[styles.itemDesc, { color: Palette.onSurfaceMuted }]}>
-                      Instant token for SSCE, BECE & NCEE
+                      Result Token
                     </Text>
                   </View>
                   <MaterialIcons name="chevron-right" size={20} color={Palette.onSurfaceMuted} />

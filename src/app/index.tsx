@@ -51,7 +51,7 @@ export default function App() {
   const [changingPin, setChangingPin] = useState(false);
   const [activeTab, setActiveTab] = useState<AppTabKey>('home');
   const [activeDedicatedService, setActiveDedicatedService] = useState<DedicatedService>(null);
-  const [initialEducationBody, setInitialEducationBody] = useState<'WAEC' | 'JAMB' | 'NECO'>('WAEC');
+  const [initialEducationBody, setInitialEducationBody] = useState<'WAEC' | 'NECO'>('WAEC');
   const [showFundWallet, setShowFundWallet] = useState(false);
   const [showAllServices, setShowAllServices] = useState(false);
   const [showReferEarn, setShowReferEarn] = useState(false);
@@ -187,7 +187,7 @@ export default function App() {
     } else if (serviceKey === 'cable') {
       setActiveDedicatedService('cable');
     } else if (serviceKey === 'education') {
-      if (params?.examBody && ['WAEC', 'JAMB', 'NECO'].includes(params.examBody.toUpperCase())) {
+      if (params?.examBody && ['WAEC', 'NECO'].includes(params.examBody.toUpperCase())) {
         setInitialEducationBody(params.examBody.toUpperCase() as any);
       }
       setActiveDedicatedService('education');

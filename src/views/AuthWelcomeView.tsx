@@ -26,7 +26,6 @@ const NETWORKS = [
 
 const EDUCATION_PROVIDERS = [
   { id: 'WAEC', label: 'WAEC', logo: SCREEN_ASSETS.waecLogo },
-  { id: 'JAMB', label: 'JAMB', logo: SCREEN_ASSETS.jambLogo },
   { id: 'NECO', label: 'NECO', logo: SCREEN_ASSETS.necoLogo },
 ];
 
@@ -88,7 +87,7 @@ export const AuthWelcomeView: React.FC<AuthWelcomeViewProps> = ({
             Fast, Affordable Data & Utility Subscriptions
           </Text>
           <Text style={[styles.heroBody, { color: T.onSurfaceVariant }]}>
-            Buy MTN, Airtel, Glo & 9mobile SME data and official WAEC, JAMB & NECO examination e-PINs instantly.
+            Buy MTN, Airtel, Glo & 9mobile SME data and official WAEC & NECO examination e-PINs instantly.
           </Text>
 
           {/* Highlight Pills */}

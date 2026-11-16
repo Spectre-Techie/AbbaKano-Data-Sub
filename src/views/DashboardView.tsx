@@ -56,7 +56,7 @@ const VTU_HUB_ITEMS = [
     key: 'education',
     icon: 'school' as const,
     title: 'Education',
-    subtitle: 'WAEC, JAMB & NECO',
+    subtitle: 'WAEC & NECO',
     badge: null,
   },
   {
