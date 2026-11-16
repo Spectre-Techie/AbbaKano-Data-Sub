@@ -7,6 +7,8 @@ import {
   saveBiometricLogin,
   clearBiometricLogin,
   saveBiometricTransactionPin,
+  clearBiometricTransactionPin,
+  clearAppLockPin,
 } from '@/services/biometricService';
 
 export interface AuthUser {
@@ -225,6 +227,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const logout = useCallback(async () => {
+    await clearBiometricTransactionPin().catch(() => {});
+    await clearAppLockPin().catch(() => {});
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     setUser(null);

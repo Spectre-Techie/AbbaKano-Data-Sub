@@ -8,6 +8,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Image,
+  TextInput,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useApp } from '@/context/AppContext';
@@ -54,7 +55,7 @@ export const EducationBillerCard: React.FC<EducationBillerCardProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Modal Picker States
-  const [pickerType, setPickerType] = useState<'exam' | 'package' | 'quantity' | null>(null);
+  const [pickerType, setPickerType] = useState<'exam' | 'package' | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -124,7 +125,7 @@ export const EducationBillerCard: React.FC<EducationBillerCardProps> = ({
     [selectedExam],
   );
 
-  const totalAmount = (selectedProduct?.amount || 0) * quantity;
+  const totalAmount = (selectedProduct?.amount || 0) * (quantity || 1);
 
   const handleSelectExam = (slug: string) => {
     setSelectedExamSlug(slug);
@@ -142,13 +143,10 @@ export const EducationBillerCard: React.FC<EducationBillerCardProps> = ({
     setPickerType(null);
   };
 
-  const handleSelectQuantity = (qty: number) => {
-    setQuantity(qty);
-    setPickerType(null);
-  };
-
   const handlePay = () => {
     if (!selectedProduct) return;
+    const finalQuantity = Math.max(1, quantity || 1);
+    if (quantity !== finalQuantity) setQuantity(finalQuantity);
 
     startCheckout({
       type: 'EDUCATION',
@@ -158,11 +156,11 @@ export const EducationBillerCard: React.FC<EducationBillerCardProps> = ({
       recipient: user?.phone || '',
       planName: selectedProduct.name,
       planId: selectedProduct.id,
-      amount: totalAmount,
+      amount: (selectedProduct.amount || 0) * finalQuantity,
       fee: 0,
       planToken: selectedProduct.selectionToken,
       metadata: {
-        quantity,
+        quantity: finalQuantity,
       },
       onSuccess,
     });
@@ -219,18 +217,28 @@ export const EducationBillerCard: React.FC<EducationBillerCardProps> = ({
         </Pressable>
       </View>
 
-      {/* 3. Quantity Dropdown */}
+      {/* 3. Quantity Input */}
       <View style={styles.fieldGroup}>
         <Text style={[styles.label, { color: Palette.onSurfaceMuted }]}>Quantity</Text>
-        <Pressable
-          style={[styles.dropdown, { borderColor: Palette.border, backgroundColor: isDark ? '#0F172A' : '#F8FAFC' }]}
-          onPress={() => setPickerType('quantity')}
-        >
-          <Text style={[styles.dropdownText, { color: Palette.onSurface }]}>
-            {quantity}
-          </Text>
-          <MaterialIcons name="expand-more" size={20} color={Palette.onSurfaceMuted} />
-        </Pressable>
+        <TextInput
+          style={[
+            styles.textInput,
+            {
+              borderColor: Palette.border,
+              backgroundColor: isDark ? '#0F172A' : '#F8FAFC',
+              color: Palette.onSurface,
+            },
+          ]}
+          keyboardType="number-pad"
+          value={String(quantity || '')}
+          onChangeText={(text) => {
+            const cleaned = text.replace(/[^0-9]/g, '');
+            setQuantity(cleaned ? Math.max(1, parseInt(cleaned, 10)) : 0);
+          }}
+          onBlur={() => {
+            if (!quantity || quantity < 1) setQuantity(1);
+          }}
+        />
       </View>
 
       {/* Total & Action */}
@@ -271,7 +279,7 @@ export const EducationBillerCard: React.FC<EducationBillerCardProps> = ({
           >
             <View style={[styles.pickerHeader, { borderBottomColor: Palette.border }]}>
               <Text style={[styles.pickerTitle, { color: Palette.onSurface }]}>
-                {pickerType === 'exam' ? 'Select Exam' : pickerType === 'package' ? 'Select Package' : 'Select Quantity'}
+                {pickerType === 'exam' ? 'Select Exam' : 'Select Package'}
               </Text>
               <Pressable onPress={() => setPickerType(null)} hitSlop={8}>
                 <MaterialIcons name="close" size={20} color={Palette.onSurfaceMuted} />
@@ -338,32 +346,6 @@ export const EducationBillerCard: React.FC<EducationBillerCardProps> = ({
                     )}
                   </Pressable>
                 ))}
-
-              {pickerType === 'quantity' &&
-                [1, 2, 3, 4, 5].map((qty) => (
-                  <Pressable
-                    key={qty}
-                    style={[
-                      styles.pickerItem,
-                      quantity === qty && {
-                        backgroundColor: isDark ? 'rgba(37, 99, 235, 0.15)' : '#EFF6FF',
-                      },
-                    ]}
-                    onPress={() => handleSelectQuantity(qty)}
-                  >
-                    <Text
-                      style={[
-                        styles.pickerItemText,
-                        { color: quantity === qty ? Palette.primary : Palette.onSurface },
-                      ]}
-                    >
-                      {qty}
-                    </Text>
-                    {quantity === qty && (
-                      <MaterialIcons name="check" size={18} color={Palette.primary} />
-                    )}
-                  </Pressable>
-                ))}
             </ScrollView>
           </View>
         </Pressable>
@@ -407,6 +389,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  textInput: {
+    height: 48,
+    borderRadius: Rounded.lg,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.three,
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: Typography.family,
   },
   dropdownText: {
     fontSize: 14,

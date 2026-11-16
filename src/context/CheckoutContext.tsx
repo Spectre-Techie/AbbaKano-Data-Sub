@@ -4,7 +4,7 @@ import { TelcoNetworkId } from '@/constants/telco';
 import { ApiError, createIdempotencyKey } from '@/lib/api';
 import { supabase, extractFunctionError } from '@/lib/supabase';
 import { useApp } from './AppContext';
-import { authenticateBiometric, getBiometricTransactionPin } from '@/services/biometricService';
+import { authenticateBiometric, getBiometricTransactionPin, clearBiometricTransactionPin } from '@/services/biometricService';
 
 export interface CheckoutDraft {
   type: TransactionType;
@@ -247,11 +247,22 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       await authenticateBiometric('Authorize this payment');
       const pin = await getBiometricTransactionPin();
       if (!pin) {
-        const msg = 'Please enter your 4-digit transaction payment PIN once to enable biometric checkout.';
+        const msg = 'Please enter your 4-digit transaction payment PIN on the keypad once to enable biometric checkout.';
         setPurchaseError(msg);
         return { success: false, error: msg };
       }
-      return await verifyPinAndExecute(pin);
+      const res = await verifyPinAndExecute(pin);
+      if (!res.success) {
+        const errLower = (res.error || '').toLowerCase();
+        if (errLower.includes('pin') || errLower.includes('password') || errLower.includes('unauthorized')) {
+          // Stored PIN was rejected by backend. Clear it immediately so stale PIN does not persist
+          await clearBiometricTransactionPin();
+          const cleanErr = 'Incorrect transaction PIN. Please enter your 4-digit PIN on the keypad to link fingerprint.';
+          setPurchaseError(cleanErr);
+          return { success: false, error: cleanErr };
+        }
+      }
+      return res;
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Biometric authorization was not completed.';
       setPurchaseError(msg);

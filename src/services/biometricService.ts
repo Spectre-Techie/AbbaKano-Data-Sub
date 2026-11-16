@@ -163,8 +163,9 @@ export async function verifyAppLockPin(pin: string): Promise<{ success: boolean;
     }
 
     if (data?.verified) {
-      // Save specifically as App Lock PIN, NEVER overwriting the Payment Transaction PIN!
+      // Save for fast app unlock and also sync validated transaction PIN for biometric checkout
       await saveAppLockPin(pin);
+      await saveBiometricTransactionPin(pin);
       return { success: true };
     }
 
