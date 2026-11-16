@@ -16,11 +16,11 @@ export interface AppUpdateInfo {
 const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.abbakano.datasub';
 const PLAY_STORE_MARKET_URL = 'market://details?id=com.abbakano.datasub';
 
-export const CURRENT_APP_VERSION = Constants.expoConfig?.version || '1.0.3';
+export const CURRENT_APP_VERSION = Constants.expoConfig?.version || '1.0.5';
 export const CURRENT_VERSION_CODE =
   typeof Constants.expoConfig?.android?.versionCode === 'number'
     ? Constants.expoConfig.android.versionCode
-    : 4;
+    : 6;
 
 /**
  * Compare two semver strings (e.g. '1.0.3' vs '1.0.2')
