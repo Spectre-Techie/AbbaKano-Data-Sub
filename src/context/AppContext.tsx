@@ -96,6 +96,68 @@ function mapServerTx(tx: any): TransactionRecord {
 
   const rawRef = tx.reference ?? tx.id;
   const refString = rawRef != null ? String(rawRef) : `TX-${Date.now()}`;
+
+  // Robust extraction of token, units, and details for electricity and education
+  const pr = tx.provider_response && typeof tx.provider_response === 'object' ? tx.provider_response : {};
+  const prData = pr.data && typeof pr.data === 'object' ? pr.data : {};
+  const meta = tx.metadata && typeof tx.metadata === 'object' ? tx.metadata : {};
+
+  const token = (
+    meta.token ||
+    meta.meter_token ||
+    meta.electricity_token ||
+    meta.pin ||
+    pr.token ||
+    prData.token ||
+    pr.token_code ||
+    prData.token_code ||
+    pr.pin ||
+    prData.pin ||
+    ''
+  ).toString().trim();
+
+  const rawUnits = (
+    meta.units ||
+    meta.token_units ||
+    meta.purchased_units ||
+    meta.kwh ||
+    pr.units ||
+    prData.units ||
+    pr.unit ||
+    prData.unit ||
+    pr.token_units ||
+    prData.token_units ||
+    pr.purchased_units ||
+    prData.purchased_units ||
+    pr.kwh ||
+    prData.kwh ||
+    ''
+  ).toString().trim();
+  const units = rawUnits ? (rawUnits.toLowerCase().includes('kwh') ? rawUnits : `${rawUnits} kWh`) : undefined;
+
+  const serialNumber = (
+    meta.serialNumber ||
+    meta.serial ||
+    pr.serialNumber ||
+    prData.serialNumber ||
+    pr.serial ||
+    prData.serial ||
+    ''
+  ).toString().trim();
+
+  const billerName = (
+    tx.network ||
+    meta.disco ||
+    meta.discoName ||
+    meta.biller_name ||
+    meta.billerName ||
+    pr.disco ||
+    prData.disco ||
+    pr.operator ||
+    prData.operator ||
+    ''
+  ).toString().trim();
+
   return {
     id: String(tx.id ?? refString),
     reference: refString,
@@ -108,6 +170,11 @@ function mapServerTx(tx: any): TransactionRecord {
     date: tx.created_at ? new Date(tx.created_at).toLocaleDateString('en-NG') : 'Recently',
     timestamp: tx.created_at ? new Date(tx.created_at).getTime() : Date.now(),
     recipient: String(tx.recipient || tx.account_number || ''),
+    token: token || undefined,
+    units,
+    serialNumber: serialNumber || undefined,
+    billerName: billerName || undefined,
+    metadata: meta,
   };
 }
 

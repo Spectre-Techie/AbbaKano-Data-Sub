@@ -4,6 +4,7 @@ import { supabase, extractFunctionError } from '@/lib/supabase';
 
 const LOGIN_CREDENTIALS_KEY = 'abbakano.biometric.login';
 const TRANSACTION_PIN_KEY = 'abbakano.biometric.transaction-pin';
+const APP_LOCK_PIN_KEY = 'abbakano.biometric.app-lock-pin';
 
 export async function authenticateBiometric(promptMessage: string) {
   const supported = await LocalAuthentication.hasHardwareAsync();
@@ -54,6 +55,18 @@ export async function getBiometricTransactionPin() {
 
 export async function clearBiometricTransactionPin() {
   await SecureStore.deleteItemAsync(TRANSACTION_PIN_KEY);
+}
+
+export async function saveAppLockPin(pin: string) {
+  await SecureStore.setItemAsync(APP_LOCK_PIN_KEY, pin);
+}
+
+export async function getAppLockPin() {
+  return SecureStore.getItemAsync(APP_LOCK_PIN_KEY);
+}
+
+export async function clearAppLockPin() {
+  await SecureStore.deleteItemAsync(APP_LOCK_PIN_KEY);
 }
 
 const APP_LOCK_ENABLED_KEY = 'abbakano.security.app-lock-enabled';
@@ -121,13 +134,12 @@ export async function verifyAppLockPin(pin: string): Promise<{ success: boolean;
     return { success: false, message: 'Enter a valid 4-digit PIN.' };
   }
 
-  // 1. Check local SecureStore PIN first (fast path)
-  const storedPin = await getBiometricTransactionPin();
-  if (storedPin && storedPin.length === 4) {
-    if (storedPin === pin) {
+  // 1. Check local App Lock PIN first (dedicated to app lock & login)
+  const storedAppLockPin = await getAppLockPin();
+  if (storedAppLockPin && storedAppLockPin.length === 4) {
+    if (storedAppLockPin === pin) {
       return { success: true };
     }
-    // Stored PIN exists on device and does not match entered PIN
     return { success: false, message: 'Incorrect PIN. Please try again.' };
   }
 
@@ -151,8 +163,8 @@ export async function verifyAppLockPin(pin: string): Promise<{ success: boolean;
     }
 
     if (data?.verified) {
-      // Sync valid PIN to local SecureStore for fast offline/subsequent unlocks
-      await saveBiometricTransactionPin(pin);
+      // Save specifically as App Lock PIN, NEVER overwriting the Payment Transaction PIN!
+      await saveAppLockPin(pin);
       return { success: true };
     }
 

@@ -7,12 +7,19 @@ import {
   Modal,
   ScrollView,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useApp } from '@/context/AppContext';
 import { useCheckout } from '@/context/CheckoutContext';
 import { Rounded, Spacing, Typography } from '@/constants/theme';
 import { supabase, extractFunctionError } from '@/lib/supabase';
+import { SCREEN_ASSETS } from '../../../assets/screenAssets';
+
+function getExamLogo(slugOrName: string) {
+  if (/neco/i.test(slugOrName)) return SCREEN_ASSETS.necoLogo;
+  return SCREEN_ASSETS.waecLogo;
+}
 
 interface EducationProduct {
   id: string;
@@ -186,9 +193,14 @@ export const EducationBillerCard: React.FC<EducationBillerCardProps> = ({
           style={[styles.dropdown, { borderColor: Palette.border, backgroundColor: isDark ? '#0F172A' : '#F8FAFC' }]}
           onPress={() => setPickerType('exam')}
         >
-          <Text style={[styles.dropdownText, { color: Palette.onSurface }]}>
-            {selectedExam?.name || 'Select Exam'}
-          </Text>
+          <View style={styles.dropdownLeftRow}>
+            {selectedExam && (
+              <Image source={getExamLogo(selectedExam.slug || selectedExam.name)} style={styles.examLogo} />
+            )}
+            <Text style={[styles.dropdownText, { color: Palette.onSurface }]}>
+              {selectedExam?.name || 'Select Exam'}
+            </Text>
+          </View>
           <MaterialIcons name="expand-more" size={20} color={Palette.onSurfaceMuted} />
         </Pressable>
       </View>
@@ -279,14 +291,17 @@ export const EducationBillerCard: React.FC<EducationBillerCardProps> = ({
                     ]}
                     onPress={() => handleSelectExam(item.slug)}
                   >
-                    <Text
-                      style={[
-                        styles.pickerItemText,
-                        { color: selectedExamSlug === item.slug ? Palette.primary : Palette.onSurface },
-                      ]}
-                    >
-                      {item.name}
-                    </Text>
+                    <View style={styles.pickerItemLeftRow}>
+                      <Image source={getExamLogo(item.slug || item.name)} style={styles.examLogoSmall} />
+                      <Text
+                        style={[
+                          styles.pickerItemText,
+                          { color: selectedExamSlug === item.slug ? Palette.primary : Palette.onSurface },
+                        ]}
+                      >
+                        {item.name}
+                      </Text>
+                    </View>
                     {selectedExamSlug === item.slug && (
                       <MaterialIcons name="check" size={18} color={Palette.primary} />
                     )}
@@ -476,5 +491,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: Typography.family,
     marginTop: 2,
+  },
+  dropdownLeftRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  examLogo: {
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
+  },
+  pickerItemLeftRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  examLogoSmall: {
+    width: 22,
+    height: 22,
+    resizeMode: 'contain',
   },
 });

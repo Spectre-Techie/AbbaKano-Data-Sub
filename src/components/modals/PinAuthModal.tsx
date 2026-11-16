@@ -12,6 +12,7 @@ import { PaletteType, Rounded, Spacing } from '@/constants/theme';
 import { useCheckout } from '@/context/CheckoutContext';
 import { useApp } from '@/context/AppContext';
 import { Numpad } from '@/components/common/Numpad';
+import { saveBiometricTransactionPin } from '@/services/biometricService';
 
 export const PinAuthModal: React.FC = () => {
   const {
@@ -53,7 +54,10 @@ export const PinAuthModal: React.FC = () => {
       setTimeout(async () => {
         try {
           const res = await verifyPinAndExecute(nextPin);
-          if (!res.success) {
+          if (res.success) {
+            // Save verified payment transaction PIN for future biometric checkouts
+            await saveBiometricTransactionPin(nextPin);
+          } else {
             setErrorMsg(res.error || purchaseError || 'Invalid transaction PIN. Please try again.');
             setPin('');
           }

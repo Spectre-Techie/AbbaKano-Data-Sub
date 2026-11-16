@@ -7,14 +7,16 @@ import {
   ScrollView,
   Pressable,
   Platform,
+  Share,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { PaletteType, Rounded, Spacing } from '@/constants/theme';
 import { TransactionRecord } from '@/constants/mockData';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/common/Button';
 import { useApp } from '@/context/AppContext';
+import { shareOrDownloadElectricityReceipt } from '@/services/receiptPdfService';
 
 interface TransactionDetailModalProps {
   transaction: TransactionRecord | null;
@@ -40,6 +42,11 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
 
   const isCredit = transaction.type === 'FUND_WALLET';
   const isDataBundle = transaction.type === 'DATA';
+  const isElectricity =
+    transaction.type === 'ELECTRICITY' ||
+    Boolean(transaction.token && transaction.token.length >= 16) ||
+    Boolean(transaction.units) ||
+    transaction.title?.toLowerCase().includes('electric');
 
   const handleCopyRef = async () => {
     if (transaction.reference != null) {
@@ -54,6 +61,21 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
     await Clipboard.setStringAsync(transaction.token);
     setTokenCopied(true);
     setTimeout(() => setTokenCopied(false), 2000);
+  };
+
+  const handleShareReceipt = async () => {
+    try {
+      const summary = `--- ABBA KANO TRANSACTION RECEIPT ---\n` +
+        `Service: ${transaction.title}\n` +
+        `Beneficiary: ${transaction.recipient}\n` +
+        `Amount: ₦${transaction.amount.toLocaleString()}\n` +
+        `Reference: ${transaction.reference}\n` +
+        `Date: ${transaction.date}\n` +
+        `Status: ${transaction.status}\n` +
+        (transaction.token ? `Prepaid Token: ${transaction.token}\n` : '') +
+        (transaction.units ? `Units: ${transaction.units}\n` : '');
+      await Share.share({ message: summary, title: `Receipt ${transaction.reference}` });
+    } catch {}
   };
 
   return (
@@ -182,19 +204,29 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
             </View>
 
             <View style={styles.actions}>
+              {isElectricity && (
+                <Button
+                  title="Download Receipt (PDF)"
+                  onPress={() => shareOrDownloadElectricityReceipt(transaction)}
+                  variant="primary"
+                  leftIcon={<MaterialIcons name="download" size={18} color="#FFFFFF" />}
+                  style={{ marginBottom: Spacing.two }}
+                />
+              )}
+
+              <Button
+                title="Share Receipt"
+                onPress={handleShareReceipt}
+                variant={isElectricity ? "secondary" : "primary"}
+                leftIcon={<Ionicons name="share-outline" size={18} color={isElectricity ? Palette.onSurface : "#FFFFFF"} />}
+                style={{ marginBottom: Spacing.two }}
+              />
+
               <Button
                 title="Report Dispute / Query"
                 onPress={() => alert(`Support ticket initiated for ${transaction.reference}`)}
                 variant="secondary"
                 leftIcon={<Ionicons name="chatbubble-ellipses-outline" size={18} color={Palette.onSurface} />}
-                style={{ marginBottom: Spacing.two }}
-              />
-
-              <Button
-                title="Share Receipt"
-                onPress={() => alert(`Sharing receipt ${transaction.reference}`)}
-                variant="primary"
-                leftIcon={<Ionicons name="share-outline" size={18} color="#FFFFFF" />}
               />
             </View>
           </ScrollView>

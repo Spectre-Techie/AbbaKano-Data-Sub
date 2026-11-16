@@ -244,10 +244,10 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const verifyBiometricAndExecute = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
     if (isExecutingRef.current) return { success: false, error: 'Transaction is already being processed.' };
     try {
-      await authenticateBiometric('Authorize this transaction');
+      await authenticateBiometric('Authorize this payment');
       const pin = await getBiometricTransactionPin();
       if (!pin) {
-        const msg = 'Set up your transaction PIN before using biometric authorization.';
+        const msg = 'Please enter your 4-digit transaction payment PIN once to enable biometric checkout.';
         setPurchaseError(msg);
         return { success: false, error: msg };
       }
