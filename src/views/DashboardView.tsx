@@ -52,6 +52,20 @@ const VTU_HUB_ITEMS = [
     subtitle: 'DSTV, GOTV & Star',
     badge: null,
   },
+  {
+    key: 'education',
+    icon: 'school' as const,
+    title: 'Education',
+    subtitle: 'WAEC, JAMB & NECO',
+    badge: null,
+  },
+  {
+    key: 'all_services',
+    icon: 'grid-view' as const,
+    title: 'All Services',
+    subtitle: 'Explore 8+ Services',
+    badge: null,
+  },
 ];
 
 export const DashboardView: React.FC<DashboardViewProps> = ({

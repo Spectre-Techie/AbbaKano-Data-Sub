@@ -7,13 +7,16 @@ import {
   ScrollView,
   Pressable,
   Platform,
+  Share,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { PaletteType, Rounded, Spacing } from '@/constants/theme';
 import { useCheckout } from '@/context/CheckoutContext';
 import { useApp } from '@/context/AppContext';
 import { Button } from '@/components/common/Button';
+import { shareOrDownloadElectricityReceipt } from '@/services/receiptPdfService';
+import { ExamSlipModal } from '@/components/modals/ExamSlipModal';
 
 export const ReceiptModal: React.FC = () => {
   const { isReceiptOpen, closeReceipt, activeReceipt } = useCheckout();
@@ -21,6 +24,7 @@ export const ReceiptModal: React.FC = () => {
   const styles = useMemo(() => getStyles(Palette, isDark), [Palette, isDark]);
   const [tokenCopied, setTokenCopied] = useState(false);
   const [refCopied, setRefCopied] = useState(false);
+  const [showExamSlip, setShowExamSlip] = useState(false);
 
   if (!activeReceipt) return null;
 
@@ -37,7 +41,23 @@ export const ReceiptModal: React.FC = () => {
     setTimeout(() => setRefCopied(false), 2000);
   };
 
+  const handleShareGeneric = async () => {
+    try {
+      const summary = `--- ABBA KANO RECEIPT ---\n` +
+        `Service: ${activeReceipt.title}\n` +
+        `Beneficiary: ${activeReceipt.recipient}\n` +
+        `Amount: ₦${activeReceipt.amount.toLocaleString()}\n` +
+        `Reference: ${activeReceipt.reference}\n` +
+        `Date: ${activeReceipt.date}\n` +
+        `Status: COMPLETED\n` +
+        (activeReceipt.token ? `Token: ${activeReceipt.token}\n` : '');
+      await Share.share({ message: summary, title: `Receipt ${activeReceipt.reference}` });
+    } catch {}
+  };
+
   const isDataBundle = activeReceipt.type === 'DATA';
+  const isElectricity = activeReceipt.type === 'ELECTRICITY';
+  const isEducation = activeReceipt.type === 'EDUCATION';
 
   return (
     <Modal
@@ -74,19 +94,28 @@ export const ReceiptModal: React.FC = () => {
               </Text>
             </View>
 
-            {/* Electricity Token Special Card */}
+            {/* Electricity Token or Exam PIN Special Card */}
             {activeReceipt.token && (
               <View style={styles.tokenCard}>
                 <View style={styles.tokenHeader}>
-                  <MaterialCommunityIcons name="lightning-bolt" size={16} color={isDark ? Palette.primaryLight : '#2563EB'} />
-                  <Text style={styles.tokenHeaderTitle}>PREPAID METER TOKEN</Text>
+                  <MaterialCommunityIcons
+                    name={isEducation ? 'school' : 'lightning-bolt'}
+                    size={16}
+                    color={isDark ? Palette.primaryLight : '#2563EB'}
+                  />
+                  <Text style={styles.tokenHeaderTitle}>
+                    {isEducation ? 'EXAMINATION e-PIN' : 'PREPAID METER TOKEN'}
+                  </Text>
                 </View>
                 <View style={styles.tokenCodeContainer}>
                   <Text style={styles.tokenValue} selectable>{activeReceipt.token}</Text>
                 </View>
                 <View style={styles.tokenFooter}>
-                  {activeReceipt.units && (
+                  {activeReceipt.units && !isEducation && (
                     <Text style={styles.tokenUnitsText}>Units: {activeReceipt.units}</Text>
+                  )}
+                  {activeReceipt.serialNumber && (
+                    <Text style={styles.tokenUnitsText}>Serial: {activeReceipt.serialNumber}</Text>
                   )}
                   <Pressable
                     style={({ pressed }) => [styles.tokenCopyBtn, pressed && styles.pressed]}
@@ -98,7 +127,7 @@ export const ReceiptModal: React.FC = () => {
                       color={tokenCopied ? Palette.tertiary : '#FFFFFF'}
                     />
                     <Text style={styles.tokenCopyBtnText}>
-                      {tokenCopied ? 'Copied' : 'Copy Token'}
+                      {tokenCopied ? 'Copied' : (isEducation ? 'Copy PIN' : 'Copy Token')}
                     </Text>
                   </Pressable>
                 </View>
@@ -182,16 +211,59 @@ export const ReceiptModal: React.FC = () => {
                 style={{ marginBottom: Spacing.two }}
               />
 
-              <Button
-                title="Share Receipt"
-                onPress={() => alert(`Receipt shared: ${activeReceipt.reference}`)}
-                variant="secondary"
-                leftIcon={<Ionicons name="share-social-outline" size={18} color={Palette.onSurface} />}
-              />
+              {isElectricity && (
+                <Button
+                  title="Download Receipt (PDF)"
+                  onPress={() => shareOrDownloadElectricityReceipt(activeReceipt)}
+                  variant="secondary"
+                  leftIcon={<MaterialIcons name="download" size={18} color={Palette.onSurface} />}
+                  style={{ marginBottom: Spacing.two }}
+                />
+              )}
+
+              {isEducation && (
+                <Button
+                  title="View & Print Exam Slip"
+                  onPress={() => setShowExamSlip(true)}
+                  variant="secondary"
+                  leftIcon={<MaterialIcons name="print" size={18} color={Palette.onSurface} />}
+                  style={{ marginBottom: Spacing.two }}
+                />
+              )}
+
+              {!isElectricity && !isEducation && (
+                <Button
+                  title="Share Receipt"
+                  onPress={handleShareGeneric}
+                  variant="secondary"
+                  leftIcon={<Ionicons name="share-social-outline" size={18} color={Palette.onSurface} />}
+                />
+              )}
             </View>
           </ScrollView>
         </View>
       </View>
+
+      {/* Exam Voucher Slip Modal */}
+      {isEducation && (
+        <ExamSlipModal
+          visible={showExamSlip}
+          onClose={() => setShowExamSlip(false)}
+          voucher={{
+            examBody: String(activeReceipt.network || 'WAEC'),
+            planLabel: activeReceipt.title,
+            pin: activeReceipt.token || '',
+            serialNumber: activeReceipt.serialNumber,
+            reference: activeReceipt.reference,
+            candidatePhone: activeReceipt.recipient,
+            candidateName: activeReceipt.metadata?.candidateName,
+            profileCode: activeReceipt.metadata?.profileCode,
+            portalUrl: activeReceipt.metadata?.portalUrl,
+            instructions: activeReceipt.metadata?.instructions,
+            vouchers: activeReceipt.metadata?.vouchers,
+          }}
+        />
+      )}
     </Modal>
   );
 };

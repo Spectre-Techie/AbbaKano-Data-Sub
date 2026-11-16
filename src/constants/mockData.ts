@@ -51,6 +51,7 @@ export type TransactionType =
   | "AIRTIME"
   | "ELECTRICITY"
   | "CABLE_TV"
+  | "EDUCATION"
   | "FUND_WALLET";
 
 export interface TransactionRecord {
@@ -64,11 +65,13 @@ export interface TransactionRecord {
   status: TransactionStatus;
   date: string;
   timestamp: number;
-  network?: TelcoNetworkId;
+  network?: TelcoNetworkId | string;
   recipient: string;
   billerName?: string;
   token?: string; // e.g. for electricity or exam pin
+  serialNumber?: string;
   units?: string;
+  metadata?: Record<string, any>;
 }
 
 export interface KycTierInfo {

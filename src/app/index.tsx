@@ -17,7 +17,9 @@ import { VtuView } from '@/views/VtuView';
 import { AirtimeView } from '@/views/AirtimeView';
 import { ElectricityView } from '@/views/ElectricityView';
 import { CableTvView } from '@/views/CableTvView';
+import { EducationView } from '@/views/EducationView';
 import { FundWalletModal } from '@/views/FundWalletView';
+import { AllServicesModal } from '@/components/modals/AllServicesModal';
 import { LedgerView } from '@/views/LedgerView';
 import { ProfileView } from '@/views/ProfileView';
 import { ReferEarnView } from '@/views/ReferEarnView';
@@ -39,7 +41,7 @@ import { supabase, extractFunctionError } from '@/lib/supabase';
 import { ReceiptModal } from '@/components/modals/ReceiptModal';
 
 type AuthState = 'authenticated' | 'welcome' | 'login' | 'register' | 'pin_setup' | 'forgot_password';
-type DedicatedService = 'airtime' | 'electricity' | 'cable' | null;
+type DedicatedService = 'airtime' | 'electricity' | 'cable' | 'education' | null;
 
 export default function App() {
   const { user, isLoading: authLoading, isPasswordRecovery, logout } = useAuth();
@@ -49,7 +51,9 @@ export default function App() {
   const [changingPin, setChangingPin] = useState(false);
   const [activeTab, setActiveTab] = useState<AppTabKey>('home');
   const [activeDedicatedService, setActiveDedicatedService] = useState<DedicatedService>(null);
+  const [initialEducationBody, setInitialEducationBody] = useState<'WAEC' | 'JAMB' | 'NECO'>('WAEC');
   const [showFundWallet, setShowFundWallet] = useState(false);
+  const [showAllServices, setShowAllServices] = useState(false);
   const [showReferEarn, setShowReferEarn] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
 
@@ -170,10 +174,11 @@ export default function App() {
     activeTab,
   ]);
 
-  const handleSelectService = (serviceKey: string) => {
+  const handleSelectService = (serviceKey: string, params?: { examBody?: string }) => {
     setShowFundWallet(false);
     setShowReferEarn(false);
     setShowSupport(false);
+    setShowAllServices(false);
 
     if (serviceKey === 'airtime') {
       setActiveDedicatedService('airtime');
@@ -181,6 +186,17 @@ export default function App() {
       setActiveDedicatedService('electricity');
     } else if (serviceKey === 'cable') {
       setActiveDedicatedService('cable');
+    } else if (serviceKey === 'education') {
+      if (params?.examBody && ['WAEC', 'JAMB', 'NECO'].includes(params.examBody.toUpperCase())) {
+        setInitialEducationBody(params.examBody.toUpperCase() as any);
+      }
+      setActiveDedicatedService('education');
+    } else if (serviceKey === 'all_services') {
+      setShowAllServices(true);
+    } else if (serviceKey === 'fund_wallet') {
+      setShowFundWallet(true);
+    } else if (serviceKey === 'refer_earn') {
+      setShowReferEarn(true);
     } else {
       // 'data' or default: open dedicated Data Bundles view
       setActiveDedicatedService(null);
@@ -190,6 +206,7 @@ export default function App() {
 
   const handleNavigateTab = (tab: AppTabKey) => {
     setShowFundWallet(false);
+    setShowAllServices(false);
     setShowReferEarn(false);
     setShowSupport(false);
     setActiveDedicatedService(null);
@@ -319,6 +336,11 @@ export default function App() {
           <ElectricityView onBackPress={() => setActiveDedicatedService(null)} />
         ) : activeDedicatedService === 'cable' ? (
           <CableTvView onBackPress={() => setActiveDedicatedService(null)} />
+        ) : activeDedicatedService === 'education' ? (
+          <EducationView
+            initialExamBody={initialEducationBody}
+            onBackPress={() => setActiveDedicatedService(null)}
+          />
         ) : (
           <>
             {activeTab === 'home' && (
@@ -364,6 +386,11 @@ export default function App() {
 
       {/* Global Overlays */}
       <FundWalletModal visible={showFundWallet} onClose={() => setShowFundWallet(false)} />
+      <AllServicesModal
+        visible={showAllServices}
+        onClose={() => setShowAllServices(false)}
+        onSelectService={handleSelectService}
+      />
       <CheckoutSheet />
       <PinAuthModal />
       <ReceiptModal />

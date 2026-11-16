@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Rounded, Spacing, Typography } from '@/constants/theme';
@@ -24,6 +24,12 @@ const NETWORKS = [
   { id: '9MOBILE', label: '9mobile', color: '#84BD00', logo: SCREEN_ASSETS.ninemobileLogo },
 ];
 
+const EDUCATION_PROVIDERS = [
+  { id: 'WAEC', label: 'WAEC', logo: SCREEN_ASSETS.waecLogo },
+  { id: 'JAMB', label: 'JAMB', logo: SCREEN_ASSETS.jambLogo },
+  { id: 'NECO', label: 'NECO', logo: SCREEN_ASSETS.necoLogo },
+];
+
 export const AuthWelcomeView: React.FC<AuthWelcomeViewProps> = ({
   onLoginPress,
   onRegisterPress,
@@ -44,112 +50,149 @@ export const AuthWelcomeView: React.FC<AuthWelcomeViewProps> = ({
 
   return (
     <View style={[styles.container, { backgroundColor: T.canvas }]}>
-      {/* Top Bar with Theme Switcher */}
-      <View style={styles.topBar}>
-        <View />
-        <Pressable
-          style={({ pressed }) => [
-            styles.themeBtn,
-            { backgroundColor: T.surfaceHigh, borderColor: T.border },
-            pressed && styles.pressed,
-          ]}
-          onPress={() => setShowThemeModal(true)}
-          hitSlop={8}
-          accessible
-          accessibilityLabel="Switch theme mode"
-        >
-          <MaterialIcons name={themeIcon} size={16} color={T.primary} />
-          <Text style={[styles.themeBtnText, { color: T.onSurface }]}>{themeLabel}</Text>
-        </Pressable>
-      </View>
-
-      {/* === HERO SECTION === */}
-      <View style={styles.heroSection}>
-        <View style={styles.brandMark}>
-          <Image
-            source={SCREEN_ASSETS.logoEmblem}
-            style={styles.brandEmblem}
-            contentFit="cover"
-          />
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Top Bar with Theme Switcher */}
+        <View style={styles.topBar}>
+          <View />
+          <Pressable
+            style={({ pressed }) => [
+              styles.themeBtn,
+              { backgroundColor: T.surfaceHigh, borderColor: T.border },
+              pressed && styles.pressed,
+            ]}
+            onPress={() => setShowThemeModal(true)}
+            hitSlop={8}
+            accessible
+            accessibilityLabel="Switch theme mode"
+          >
+            <MaterialIcons name={themeIcon} size={16} color={T.primary} />
+            <Text style={[styles.themeBtnText, { color: T.onSurface }]}>{themeLabel}</Text>
+          </Pressable>
         </View>
 
-        <Text style={[styles.heroTitle, { color: T.onSurface }]}>AbbaKano Data Sub</Text>
-        <Text style={[styles.heroSubtitle, { color: T.primary }]}>
-          Fast, Affordable Data & Utility Subscriptions
-        </Text>
-        <Text style={[styles.heroBody, { color: T.onSurfaceVariant }]}>
-          Buy MTN, Airtel, Glo & 9mobile SME data instantly at verified wholesale reseller rates. 100% automated delivery.
-        </Text>
+        {/* === HERO SECTION === */}
+        <View style={styles.heroSection}>
+          <View style={styles.brandMark}>
+            <Image
+              source={SCREEN_ASSETS.logoEmblem}
+              style={styles.brandEmblem}
+              contentFit="cover"
+            />
+          </View>
 
-        {/* Highlight Pills */}
-        <View style={styles.highlightsRow}>
-          {HIGHLIGHTS.map((h) => (
-            <View key={h.icon} style={[styles.highlightPill, {
-              backgroundColor: isDark ? 'rgba(238,152,0,0.10)' : 'rgba(238,152,0,0.08)',
-              borderColor: isDark ? 'rgba(238,152,0,0.25)' : 'rgba(238,152,0,0.20)',
-            }]}>
-              <MaterialIcons name={h.icon} size={16} color={T.secondary} />
-              <Text style={[styles.highlightPillText, { color: T.secondary }]}>{h.label}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      {/* === SUPPORTED NETWORK OPERATORS GRID === */}
-      <View style={[styles.showcaseCard, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
-        <Text style={[styles.networkGridLabel, { color: T.onSurfaceMuted }]}>
-          SUPPORTED NETWORKS
-        </Text>
-        <View style={styles.networkGrid}>
-          {NETWORKS.map((net) => (
-            <View
-              key={net.id}
-              style={[
-                styles.networkGridCard,
-                {
-                  backgroundColor: T.surface,
-                  borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-                },
-              ]}
-            >
-              <View style={[styles.carrierCircle, { backgroundColor: net.color }]}>
-                <Image
-                  source={net.logo}
-                  style={styles.carrierLogo}
-                  contentFit="contain"
-                />
-              </View>
-              <Text style={[styles.networkCardName, { color: T.onSurface }]}>
-                {net.label}
-              </Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      {/* === CTA BUTTONS === */}
-      <View style={styles.ctaSection}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.primaryBtn,
-            { backgroundColor: T.primaryContainer, shadowColor: T.primary },
-            pressed && { opacity: 0.88 },
-          ]}
-          onPress={onRegisterPress}
-        >
-          <Text style={styles.primaryBtnText}>Create Free Account</Text>
-          <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
-        </Pressable>
-
-        <Pressable
-          style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.85 }]}
-          onPress={onLoginPress}
-        >
-          <Text style={[styles.secondaryBtnText, { color: T.onSurfaceVariant }]}>
-            I already have an account • Sign In
+          <Text style={[styles.heroTitle, { color: T.onSurface }]}>AbbaKano Data Sub</Text>
+          <Text style={[styles.heroSubtitle, { color: T.primary }]}>
+            Fast, Affordable Data & Utility Subscriptions
           </Text>
-        </Pressable>
-      </View>
+          <Text style={[styles.heroBody, { color: T.onSurfaceVariant }]}>
+            Buy MTN, Airtel, Glo & 9mobile SME data and official WAEC, JAMB & NECO examination e-PINs instantly.
+          </Text>
+
+          {/* Highlight Pills */}
+          <View style={styles.highlightsRow}>
+            {HIGHLIGHTS.map((h) => (
+              <View key={h.icon} style={[styles.highlightPill, {
+                backgroundColor: isDark ? 'rgba(238,152,0,0.10)' : 'rgba(238,152,0,0.08)',
+                borderColor: isDark ? 'rgba(238,152,0,0.25)' : 'rgba(238,152,0,0.20)',
+              }]}>
+                <MaterialIcons name={h.icon} size={16} color={T.secondary} />
+                <Text style={[styles.highlightPillText, { color: T.secondary }]}>{h.label}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* === SUPPORTED NETWORK OPERATORS GRID === */}
+        <View style={[styles.showcaseCard, { backgroundColor: T.surfaceLow, borderColor: T.border, marginTop: Spacing.three }]}>
+          <Text style={[styles.networkGridLabel, { color: T.onSurfaceMuted }]}>
+            SUPPORTED NETWORKS
+          </Text>
+          <View style={styles.networkGrid}>
+            {NETWORKS.map((net) => (
+              <View
+                key={net.id}
+                style={[
+                  styles.networkGridCard,
+                  {
+                    backgroundColor: T.surface,
+                    borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                  },
+                ]}
+              >
+                <View style={[styles.carrierCircle, { backgroundColor: net.color }]}>
+                  <Image
+                    source={net.logo}
+                    style={styles.carrierLogo}
+                    contentFit="contain"
+                  />
+                </View>
+                <Text style={[styles.networkCardName, { color: T.onSurface }]}>
+                  {net.label}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* === EDUCATION & EXAMINATION PARTNERS === */}
+        <View style={[styles.showcaseCard, { backgroundColor: T.surfaceLow, borderColor: T.border, marginTop: Spacing.two }]}>
+          <Text style={[styles.networkGridLabel, { color: T.onSurfaceMuted }]}>
+            EDUCATION & EXAM e-PINs
+          </Text>
+          <View style={styles.networkGrid}>
+            {EDUCATION_PROVIDERS.map((edu) => (
+              <View
+                key={edu.id}
+                style={[
+                  styles.networkGridCard,
+                  {
+                    backgroundColor: T.surface,
+                    borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                  },
+                ]}
+              >
+                <View style={styles.eduCircle}>
+                  <Image
+                    source={edu.logo}
+                    style={styles.carrierLogo}
+                    contentFit="contain"
+                  />
+                </View>
+                <Text style={[styles.networkCardName, { color: T.onSurface }]}>
+                  {edu.label}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* === CTA BUTTONS === */}
+        <View style={styles.ctaSection}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.primaryBtn,
+              { backgroundColor: T.primaryContainer, shadowColor: T.primary },
+              pressed && { opacity: 0.88 },
+            ]}
+            onPress={onRegisterPress}
+          >
+            <Text style={styles.primaryBtnText}>Create Free Account</Text>
+            <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.85 }]}
+            onPress={onLoginPress}
+          >
+            <Text style={[styles.secondaryBtnText, { color: T.onSurfaceVariant }]}>
+              I already have an account • Sign In
+            </Text>
+          </Pressable>
+        </View>
+      </ScrollView>
 
       {/* Theme Selection Modal */}
       <ThemeSwitchModal visible={showThemeModal} onClose={() => setShowThemeModal(false)} />
@@ -160,10 +203,13 @@ export const AuthWelcomeView: React.FC<AuthWelcomeViewProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollContent: {
     paddingHorizontal: Spacing.five,
     paddingTop: Spacing.four,
     paddingBottom: Spacing.six,
     justifyContent: 'space-between',
+    gap: Spacing.three,
   },
   topBar: {
     flexDirection: 'row',
@@ -289,6 +335,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 6,
     overflow: 'hidden',
+  },
+  eduCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+    overflow: 'hidden',
+    padding: 2,
   },
   carrierLogo: {
     width: 34,

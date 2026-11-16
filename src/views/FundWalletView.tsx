@@ -2,7 +2,7 @@ import { PaletteType, Rounded, Spacing, Typography } from "@/constants/theme";
 import { useApp, formatBeneficiaryAccountName } from "@/context/AppContext";
 import { MaterialIcons } from "@expo/vector-icons";
 import * as Clipboard from 'expo-clipboard';
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -27,9 +27,16 @@ export const FundWalletModal: React.FC<FundWalletModalProps> = ({
   onClose,
   onBackPress,
 }) => {
-  const { virtualAccounts, user, refreshData, theme: Palette, generateVirtualAccountsWithNin } = useApp();
+  const { virtualAccounts, user, refreshData, loadVirtualAccounts, theme: Palette, generateVirtualAccountsWithNin } = useApp();
   const styles = useMemo(() => getStyles(Palette), [Palette]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Whenever user opens Fund Wallet, dynamically fetch freshly added payment gateways & virtual accounts
+  useEffect(() => {
+    if (visible) {
+      void loadVirtualAccounts();
+    }
+  }, [visible, loadVirtualAccounts]);
 
   // NIN submission state
   const [ninInput, setNinInput] = useState('');
@@ -68,7 +75,7 @@ export const FundWalletModal: React.FC<FundWalletModalProps> = ({
     setReloading(true);
     setNinError(null);
     try {
-      await refreshData(true);
+      await Promise.all([refreshData(true), loadVirtualAccounts()]);
     } finally {
       setReloading(false);
     }

@@ -10,9 +10,10 @@ export interface CheckoutDraft {
   type: TransactionType;
   title: string;
   serviceName: string;
-  network?: TelcoNetworkId;
+  network?: TelcoNetworkId | string;
   recipient: string;
   planName?: string;
+  planId?: string;
   amount: number;
   fee: number;
   billerName?: string;
@@ -25,6 +26,7 @@ export interface CheckoutDraft {
   meterType?: string;
   /** Unique idempotency key pinned to this specific checkout instance */
   idempotencyKey?: string;
+  metadata?: Record<string, any>;
   onSuccess?: () => void;
 }
 
@@ -104,6 +106,7 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         AIRTIME: 'purchase-airtime',
         ELECTRICITY: 'electricity-purchase',
         CABLE_TV: 'cable-purchase',
+        EDUCATION: 'education-purchase',
         FUND_WALLET: 'data-purchase',
       };
 
@@ -130,6 +133,14 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (draft.meterType) body.meterType = draft.meterType;
       if (draft.type === 'CABLE_TV' && draft.billerName) body.provider = draft.billerName;
       if (draft.type === 'ELECTRICITY' && draft.network) body.provider = draft.network;
+      if (draft.type === 'EDUCATION') {
+        body.examBody = draft.network?.toUpperCase();
+        body.planCode = draft.planId;
+        body.candidatePhone = draft.recipient;
+        body.quantity = draft.metadata?.quantity || 1;
+        if (draft.metadata?.candidateName) body.candidateName = draft.metadata.candidateName;
+        if (draft.metadata?.profileCode) body.profileCode = draft.metadata.profileCode;
+      }
 
       const { data: result, error } = await supabase.functions.invoke<{
         reference?: string;
@@ -138,6 +149,7 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         units?: string;
         message?: string;
         balance_kobo?: number;
+        voucher?: any;
       }>(functionName, { body });
 
       if (error) {
@@ -158,10 +170,12 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       };
 
       const isSuccess = (result.status || 'success').toLowerCase() === 'success';
+      const token = result.token || (result as any).voucher?.pin;
+      const serialNumber = (result as any).voucher?.serialNumber;
 
       const newTx: TransactionRecord = {
-        id: result.reference || `tx-${Date.now()}`,
-        reference: result.reference || `ABK-${Date.now()}`,
+        id: result.reference || (result as any).voucher?.reference || `tx-${Date.now()}`,
+        reference: result.reference || (result as any).voucher?.reference || `ABK-${Date.now()}`,
         type: draft.type,
         title: draft.title,
         description: `${draft.serviceName} to ${draft.recipient}`,
@@ -173,7 +187,9 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         network: draft.network,
         recipient: draft.recipient,
         billerName: draft.billerName,
-        token: result.token,
+        token,
+        serialNumber,
+        metadata: (result as any).voucher || draft.metadata,
         units: result.units
           ? (result.units.toLowerCase().includes('kwh') ? result.units : `${result.units} kWh`)
           : draft.units,

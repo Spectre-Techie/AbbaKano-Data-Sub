@@ -21,6 +21,7 @@ interface AppContextType {
   isBalanceMasked: boolean;
   toggleBalanceMask: () => void;
   virtualAccounts: VirtualAccount[];
+  loadVirtualAccounts: () => Promise<void>;
   requiresNin: boolean;
   generateVirtualAccountsWithNin: (nin: string) => Promise<{ success: boolean; accounts?: VirtualAccount[]; error?: string }>;
   transactions: TransactionRecord[];
@@ -154,26 +155,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const refreshInFlightRef = useRef<boolean>(false);
   const cancelledDepositIdsRef = useRef<Set<string>>(new Set());
 
-  // ── Fetch Monnify Virtual Accounts with User-Customized Name ─────────────
+  // ── Fetch Virtual Accounts (Monnify, PalmPay, etc.) with Dynamic Gateways ──
   const loadVirtualAccounts = useCallback(async () => {
     if (!user?.id) return;
     try {
-      // 1. Invoke edge function
-      const { data: edgeData, error: edgeError } = await supabase.functions.invoke('virtual-accounts', {});
       let rawAccounts: any[] = [];
-      if (!edgeError && edgeData && Array.isArray((edgeData as any).accounts)) {
-        rawAccounts = (edgeData as any).accounts;
+
+      // 1. Invoke edge function
+      try {
+        const { data: edgeData, error: edgeError } = await supabase.functions.invoke('virtual-accounts', { body: {} });
+        if (!edgeError && edgeData && Array.isArray((edgeData as any).accounts)) {
+          rawAccounts.push(...(edgeData as any).accounts);
+        } else if (edgeData && (edgeData as any).requiresIdentity) {
+          setRequiresNin(true);
+        }
+      } catch (e) {
+        console.warn('Edge virtual-accounts error, falling back to direct table query:', e);
       }
 
-      // 2. Fallback to user_virtual_accounts table if empty
-      if (rawAccounts.length === 0) {
+      // 2. Query user_virtual_accounts table directly to include all newly added gateways
+      try {
         const { data: tableData } = await supabase
           .from('user_virtual_accounts')
-          .select('bank_name, account_number, account_name')
+          .select('bank_name, account_number, account_name, provider')
           .eq('user_id', user.id);
+
         if (Array.isArray(tableData) && tableData.length > 0) {
-          rawAccounts = tableData;
+          const seen = new Set(
+            rawAccounts.map((a: any) => String(a.accountNumber || a.account_number || '').trim())
+          );
+          for (const row of tableData) {
+            const accNo = String(row.account_number || '').trim();
+            if (accNo && !seen.has(accNo)) {
+              rawAccounts.push(row);
+              seen.add(accNo);
+            }
+          }
         }
+      } catch (tableErr) {
+        console.warn('Error reading user_virtual_accounts table:', tableErr);
       }
 
       if (rawAccounts.length > 0) {
@@ -197,10 +217,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setRequiresNin(false);
           return;
         }
-      }
-
-      if (edgeData && (edgeData as any).requiresNin) {
-        setRequiresNin(true);
       }
     } catch (err) {
       console.warn('Failed to load virtual accounts:', err);
@@ -468,6 +484,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isBalanceMasked,
         toggleBalanceMask,
         virtualAccounts,
+        loadVirtualAccounts,
         requiresNin,
         generateVirtualAccountsWithNin,
         transactions,

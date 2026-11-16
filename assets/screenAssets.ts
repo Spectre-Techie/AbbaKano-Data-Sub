@@ -14,6 +14,11 @@ export const SCREEN_ASSETS = {
   gotvLogo: require('./screens/gotv-logo.png'),
   startimesLogo: require('./screens/startimes-logo.png'),
 
+  // Education Provider Logos
+  waecLogo: require('./screens/waec-logo.png'),
+  jambLogo: require('./screens/jamb-logo.jpg'),
+  necoLogo: require('./screens/neco-logo.jpg'),
+
   // Compatibility Fallbacks for explore.tsx preview screen
   appLockPin: require('./screens/AbbaKano Logo.png'),
   appLockPinDark: require('./screens/AbbaKano Logo.png'),
@@ -41,3 +46,7 @@ export const SCREEN_ASSETS = {
   welcomeLanding: require('./screens/AbbaKano Logo.png'),
   welcomeLandingDark: require('./screens/AbbaKano Logo.png'),
 };
+
+export const waecLogo = SCREEN_ASSETS.waecLogo;
+export const jambLogo = SCREEN_ASSETS.jambLogo;
+export const necoLogo = SCREEN_ASSETS.necoLogo;
