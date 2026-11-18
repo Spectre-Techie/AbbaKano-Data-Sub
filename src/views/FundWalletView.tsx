@@ -43,6 +43,7 @@ export const FundWalletModal: React.FC<FundWalletModalProps> = ({
   const [generating, setGenerating] = useState(false);
   const [ninError, setNinError] = useState<string | null>(null);
   const [reloading, setReloading] = useState(false);
+  const [showIdentityForm, setShowIdentityForm] = useState(false);
 
   const handleClose = onClose || onBackPress || (() => {});
 
@@ -60,6 +61,8 @@ export const FundWalletModal: React.FC<FundWalletModalProps> = ({
       const res = await generateVirtualAccountsWithNin(cleanNin);
       if (res.success) {
         setToastMessage('Virtual Accounts Ready!');
+        setShowIdentityForm(false);
+        setNinInput('');
         setTimeout(() => setToastMessage(null), 2500);
       } else {
         setNinError(res.error || 'Account generation failed. Please verify your NIN.');
@@ -162,8 +165,9 @@ export const FundWalletModal: React.FC<FundWalletModalProps> = ({
               contentContainerStyle={styles.scrollContent}
               keyboardShouldPersistTaps="handled"
             >
-              {virtualAccounts.length > 0 ? (
-                virtualAccounts.map((account, idx) => {
+              {virtualAccounts.length > 0 && !showIdentityForm ? (
+                <>
+                {virtualAccounts.map((account, idx) => {
                   const cleanAccountNumber = account.accountNumber.replace(/\s/g, '');
                   const beneficiaryName = formatBeneficiaryAccountName(account.accountName, userDisplayName);
 
@@ -245,7 +249,36 @@ export const FundWalletModal: React.FC<FundWalletModalProps> = ({
                       </View>
                     </View>
                   );
-                })
+                })}
+
+                {/* Generate Dedicated Account with NIN Action Card */}
+                <View style={styles.generateActionCard}>
+                  <View style={styles.generateActionHeader}>
+                    <View style={styles.generateActionIconBox}>
+                      <MaterialIcons name="add-card" size={20} color={Palette.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.generateActionTitle}>Generate Dedicated Account</Text>
+                      <Text style={styles.generateActionDesc}>
+                        Provide your NIN to generate automated virtual bank accounts.
+                      </Text>
+                    </View>
+                  </View>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.generateActionBtn,
+                      pressed && { opacity: 0.85 },
+                    ]}
+                    onPress={() => {
+                      setShowIdentityForm(true);
+                      setNinError(null);
+                    }}
+                  >
+                    <MaterialIcons name="bolt" size={17} color="#FFFFFF" />
+                    <Text style={styles.generateActionBtnText}>Generate with NIN</Text>
+                  </Pressable>
+                </View>
+                </>
               ) : (
                 /* NIN Identification Prompt Card */
                 <View style={styles.ninCard}>
@@ -335,6 +368,20 @@ export const FundWalletModal: React.FC<FundWalletModalProps> = ({
                       </View>
                     )}
                   </Pressable>
+
+                  {/* Back to accounts button if user already has accounts */}
+                  {virtualAccounts.length > 0 && (
+                    <Pressable
+                      style={styles.backToAccountsBtn}
+                      onPress={() => {
+                        setShowIdentityForm(false);
+                        setNinError(null);
+                      }}
+                    >
+                      <MaterialIcons name="arrow-back" size={15} color={Palette.primary} />
+                      <Text style={styles.backToAccountsText}>Back to my accounts</Text>
+                    </Pressable>
+                  )}
 
                   {/* Security Guarantee */}
                   <View style={styles.securityRow}>
@@ -777,5 +824,70 @@ const getStyles = (Palette: PaletteType) =>
       color: Palette.primary,
       fontFamily: Typography.family,
       textDecorationLine: 'underline',
+    },
+    generateActionCard: {
+      backgroundColor: Palette.surface,
+      borderRadius: Rounded.xl,
+      borderWidth: 1,
+      borderColor: Palette.border,
+      padding: Spacing.three,
+      gap: Spacing.twoAndHalf,
+      marginTop: Spacing.one,
+    },
+    generateActionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.two,
+    },
+    generateActionIconBox: {
+      width: 36,
+      height: 36,
+      borderRadius: Rounded.lg,
+      backgroundColor: Palette.surfaceHigh,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    generateActionTitle: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: Palette.onSurface,
+      fontFamily: Typography.family,
+    },
+    generateActionDesc: {
+      fontSize: 11,
+      color: Palette.onSurfaceMuted,
+      fontFamily: Typography.family,
+      lineHeight: 16,
+      marginTop: 2,
+    },
+    generateActionBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      backgroundColor: Palette.primary,
+      borderRadius: Rounded.lg,
+      paddingVertical: Spacing.twoAndHalf,
+    },
+    generateActionBtnText: {
+      color: '#FFFFFF',
+      fontSize: 12,
+      fontWeight: '800',
+      fontFamily: Typography.family,
+      letterSpacing: 0.3,
+    },
+    backToAccountsBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingVertical: 8,
+      borderRadius: Rounded.lg,
+    },
+    backToAccountsText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: Palette.primary,
+      fontFamily: Typography.family,
     },
   });

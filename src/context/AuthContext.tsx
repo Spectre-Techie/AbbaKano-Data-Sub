@@ -51,6 +51,11 @@ export interface RegisterPayload {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function isSyntheticEmail(email?: string | null): boolean {
+  if (!email) return false;
+  return email.endsWith('@abbakano.com') || email.endsWith('@abbakano.internal');
+}
+
 function mapUser(user: {
   id: string;
   email?: string | null;
@@ -69,13 +74,15 @@ function mapUser(user: {
       ? metadata.name
       : undefined;
 
+  const displayEmail = isSyntheticEmail(user.email) ? null : (user.email || null);
+
   return {
     id: user.id,
     fullName,
     name: fullName,
     phone: rawPhone,
-    email: user.email || null,
-    username: user.email || rawPhone,
+    email: displayEmail,
+    username: rawPhone || displayEmail || '',
     role: typeof metadata.role === 'string' ? (metadata.role as any) : 'user',
     referralCode: typeof metadata.referral_code === 'string' ? metadata.referral_code : undefined,
   };
@@ -169,7 +176,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       throw new Error('Please enter a valid Nigerian phone number (e.g. 08012345678) or email address.');
     }
-    const { data, error } = await supabase.auth.signInWithPassword(credentials);
+    let { data, error } = await supabase.auth.signInWithPassword(credentials);
+    if (error && !normalizedIdentifier.includes('@')) {
+      const cleanPhone = normalizedIdentifier.replace(/\D/g, '');
+      if (cleanPhone) {
+        const fallbackRes = await supabase.auth.signInWithPassword({
+          email: `${cleanPhone}@abbakano.com`,
+          password,
+        });
+        if (fallbackRes.data?.user) {
+          data = fallbackRes.data;
+          error = null;
+        }
+      }
+    }
     if (error || !data.user) {
       const msg = (error?.message || '').toLowerCase();
       if (msg.includes('network') || msg.includes('fetch') || msg.includes('timeout') || msg.includes('failed to fetch')) {
@@ -189,7 +209,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const signInCredentials = normalizedIdentifier.includes('@')
       ? { email: normalizedIdentifier.toLowerCase(), password: credentials.password }
       : { phone: normalizePhone(normalizedIdentifier), password: credentials.password };
-    const { data, error } = await supabase.auth.signInWithPassword(signInCredentials);
+    let { data, error } = await supabase.auth.signInWithPassword(signInCredentials);
+    if (error && !normalizedIdentifier.includes('@')) {
+      const cleanPhone = normalizedIdentifier.replace(/\D/g, '');
+      if (cleanPhone) {
+        const fallbackRes = await supabase.auth.signInWithPassword({
+          email: `${cleanPhone}@abbakano.com`,
+          password: credentials.password,
+        });
+        if (fallbackRes.data?.user) {
+          data = fallbackRes.data;
+          error = null;
+        }
+      }
+    }
     if (error || !data.user) {
       await clearBiometricLogin();
       throw error || new Error('Biometric sign-in could not be completed.');
@@ -198,17 +231,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const register = useCallback(async (payload: RegisterPayload) => {
-    const email = payload.email?.trim().toLowerCase();
-    if (!email) throw new Error('Email address is required to create an account.');
+    const rawEmail = payload.email?.trim().toLowerCase();
+    if (rawEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
+      throw new Error('Please enter a valid email address or leave it blank.');
+    }
+
+    const cleanPhone = payload.phone.replace(/\D/g, '');
+    const normalizedPhone = normalizePhone(payload.phone);
+    // If user provided no email, generate a deterministic alias so the backend live edge function email requirement is satisfied
+    const emailForBackend = rawEmail || (cleanPhone ? `${cleanPhone}@abbakano.com` : undefined);
 
     const { error: registrationError } = await supabase.functions.invoke('register-user', {
       body: {
-        fullName: payload.fullName,
-        phone: payload.phone,
-        email,
+        fullName: payload.fullName.trim(),
+        phone: payload.phone.trim(),
+        email: emailForBackend,
         password: payload.password,
         pin: payload.pin,
-        referralCode: payload.referralCode,
+        referralCode: payload.referralCode?.trim() || undefined,
       },
     });
     if (registrationError) {
@@ -216,12 +256,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error(extracted);
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password: payload.password,
-    });
+    let signInCredentials: { email: string; password: string } | { phone: string; password: string } = rawEmail
+      ? { email: rawEmail, password: payload.password }
+      : { phone: normalizedPhone, password: payload.password };
+
+    let { data, error } = await supabase.auth.signInWithPassword(signInCredentials);
+    if (error && !rawEmail && emailForBackend) {
+      const fallbackRes = await supabase.auth.signInWithPassword({
+        email: emailForBackend,
+        password: payload.password,
+      });
+      if (fallbackRes.data?.user) {
+        data = fallbackRes.data;
+        error = null;
+      }
+    }
+
     if (error || !data.user) throw error || new Error('Account created, but sign in failed.');
-    await saveBiometricLogin(email, payload.password);
+    await saveBiometricLogin(rawEmail || payload.phone, payload.password);
     await saveBiometricTransactionPin(payload.pin);
     setUser(mapUser(data.user));
   }, []);
